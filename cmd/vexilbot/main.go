@@ -324,7 +324,7 @@ func main() {
 			RunRelease:      runRelease,
 			FetchRepoConfig: fetchRepoConfig,
 		})
-		dashAddr := fmt.Sprintf("127.0.0.1:%d", cfg.Server.DashboardPort)
+		dashAddr := fmt.Sprintf(":%d", cfg.Server.DashboardPort)
 		go func() {
 			slog.Info("dashboard starting", "listen", dashAddr)
 			if err := http.ListenAndServe(dashAddr, dashSrv); err != nil {
