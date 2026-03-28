@@ -53,17 +53,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := os.MkdirAll("data", 0o755); err != nil {
+	cfg, err := serverconfig.Load(os.Args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := os.MkdirAll(cfg.Server.DataDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "create data dir: %v\n", err)
 		os.Exit(1)
 	}
-	logStore, err := vexstore.OpenAppendStore("data/logs.vxb", logentry.SchemaHash)
+	logStore, err := vexstore.OpenAppendStore(cfg.Server.DataDir+"/logs.vxb", logentry.SchemaHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open log store: %v\n", err)
 		os.Exit(1)
 	}
 	defer logStore.Close()
-	eventStore, err := vexstore.OpenAppendStore("data/events.vxb", webhookevent.SchemaHash)
+	eventStore, err := vexstore.OpenAppendStore(cfg.Server.DataDir+"/events.vxb", webhookevent.SchemaHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open event store: %v\n", err)
 		os.Exit(1)
@@ -71,12 +77,6 @@ func main() {
 	defer eventStore.Close()
 	logger := slog.New(logstore.NewHandler(logStore, slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
-
-	cfg, err := serverconfig.Load(os.Args[1])
-	if err != nil {
-		slog.Error("load config", "error", err)
-		os.Exit(1)
-	}
 
 	app, err := ghclient.NewApp(cfg.GitHub.AppID, cfg.GitHub.PrivateKeyPath)
 	if err != nil {
@@ -245,6 +245,25 @@ func main() {
 			if err := welcome.MaybeWelcomeIssue(ctx, adapter, ev.Owner, ev.Repo, ev.UserLogin, ev.Number, repoCfg.Welcome.IssueMessage); err != nil {
 				slog.Error("welcome issue", "error", err)
 			}
+		}()
+	})
+
+	dispatcher.OnPush(func(ev webhook.PushEvent) {
+		go func() {
+			ctx := context.Background()
+			store.set(ev.Owner, ev.Repo, ev.InstallationID)
+			wev := &webhookevent.WebhookEvent{
+				Ts:     uint64(time.Now().UnixNano()),
+				Kind:   webhookevent.EventKindPush,
+				Owner:  ev.Owner,
+				Repo:   ev.Repo,
+				Action: "",
+			}
+			bw := vexil.NewBitWriter()
+			if wev.Pack(bw) == nil {
+				_ = eventStore.Append(bw.Finish())
+			}
+			slog.InfoContext(ctx, "push event recorded", "owner", ev.Owner, "repo", ev.Repo)
 		}()
 	})
 

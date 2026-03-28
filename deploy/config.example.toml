@@ -7,6 +7,8 @@ listen = "0.0.0.0:8080"
 #   openssl rand -hex 32
 webhook_secret = "REPLACE_WITH_WEBHOOK_SECRET"
 
+# data_dir = "data"  # Directory for .vxb binary store files (default: "data")
+
 [github]
 # Your GitHub App ID (visible on the App settings page)
 app_id = 0

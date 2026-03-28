@@ -18,6 +18,7 @@ type Server struct {
 	Listen        string `toml:"listen"`
 	WebhookSecret string `toml:"webhook_secret"`
 	BotName       string `toml:"bot_name"`
+	DataDir       string `toml:"data_dir"`
 }
 
 type GitHub struct {
@@ -46,6 +47,10 @@ func Load(path string) (*Config, error) {
 
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	if cfg.Server.DataDir == "" {
+		cfg.Server.DataDir = "data"
 	}
 
 	return &cfg, nil

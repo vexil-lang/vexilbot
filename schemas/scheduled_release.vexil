@@ -1,3 +1,8 @@
+-- ScheduledRelease is defined here for documentation purposes.
+-- Codegen is pending: the vexilc syntax for sub-byte fields (u1, u2) and enum
+-- backing types may differ from the other schemas. Update and run codegen
+-- when the CLI syntax is confirmed.
+
 namespace scheduledrelease
 
 enum BumpLevel : u2 {
