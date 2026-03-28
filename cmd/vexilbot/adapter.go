@@ -263,6 +263,12 @@ func (a *ghAdapter) CreatePR(ctx context.Context, owner, repo, title, body, head
 	return pr.GetNumber(), nil
 }
 
+func (a *ghAdapter) MergePR(ctx context.Context, owner, repo string, number int, method string) error {
+	opts := &github.PullRequestOptions{MergeMethod: method}
+	_, _, err := a.client.PullRequests.Merge(ctx, owner, repo, number, "", opts)
+	return err
+}
+
 // --- PR files ---
 
 func (a *ghAdapter) ListPRFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {

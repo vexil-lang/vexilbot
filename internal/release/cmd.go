@@ -20,6 +20,7 @@ type ReleaseAPI interface {
 	CreateBranch(ctx context.Context, owner, repo, branch, sha string) error
 	UpdateFile(ctx context.Context, owner, repo, path, message string, content []byte, sha, branch string) error
 	CreatePR(ctx context.Context, owner, repo, title, body, head, base string) (int, error)
+	MergePR(ctx context.Context, owner, repo string, number int, method string) error
 	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
 }
 

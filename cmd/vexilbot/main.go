@@ -239,7 +239,7 @@ func main() {
 			}
 
 			if cmd.Name == "release" {
-				handleRelease(ctx, adapter, repoCfg, ev.Owner, ev.Repo, ev.IssueNumber, cmd.Args)
+				handleRelease(ctx, adapter, repoCfg, ev.Owner, ev.Repo, ev.IssueNumber, ev.IsPR, cmd.Args)
 				return
 			}
 
@@ -340,7 +340,23 @@ func main() {
 	}
 }
 
-func handleRelease(ctx context.Context, adapter *ghAdapter, repoCfg *repoconfig.Config, owner, repo string, issueNumber int, args []string) {
+func handleRelease(ctx context.Context, adapter *ghAdapter, repoCfg *repoconfig.Config, owner, repo string, issueNumber int, isPR bool, args []string) {
+	// If the release command was on a PR, merge it first so the release
+	// includes the PR's changes.
+	if isPR && (len(args) == 0 || args[0] != "status") {
+		slog.Info("release on PR — merging first", "pr", issueNumber)
+		if err := adapter.MergePR(ctx, owner, repo, issueNumber, "merge"); err != nil {
+			slog.Error("merge PR before release", "pr", issueNumber, "error", err)
+			_ = adapter.CreateComment(ctx, owner, repo, issueNumber,
+				fmt.Sprintf(":x: Failed to merge PR before release: %v", err))
+			return
+		}
+		_ = adapter.CreateComment(ctx, owner, repo, issueNumber,
+			":white_check_mark: Merged. Creating release PR...")
+		// Brief pause to let GitHub propagate the merge
+		time.Sleep(3 * time.Second)
+	}
+
 	var err error
 	switch {
 	case len(args) == 0:
@@ -352,6 +368,8 @@ func handleRelease(ctx context.Context, adapter *ghAdapter, repoCfg *repoconfig.
 	}
 	if err != nil {
 		slog.Error("release command", "args", args, "error", err)
+		_ = adapter.CreateComment(ctx, owner, repo, issueNumber,
+			fmt.Sprintf(":x: Release failed: %v", err))
 	}
 }
 

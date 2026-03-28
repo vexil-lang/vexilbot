@@ -21,6 +21,7 @@ type IssueCommentEvent struct {
 	CommentBody    string
 	CommentUser    string
 	IssueNumber    int
+	IsPR           bool // true if the comment is on a pull request
 	Owner          string
 	Repo           string
 	InstallationID int64
@@ -133,7 +134,8 @@ func (d *Dispatcher) dispatchIssueComment(payload []byte) {
 			} `json:"user"`
 		} `json:"comment"`
 		Issue struct {
-			Number int `json:"number"`
+			Number      int              `json:"number"`
+			PullRequest *json.RawMessage `json:"pull_request"` // non-nil if comment is on a PR
 		} `json:"issue"`
 		Repository   repoInfo     `json:"repository"`
 		Installation installation `json:"installation"`
@@ -149,6 +151,7 @@ func (d *Dispatcher) dispatchIssueComment(payload []byte) {
 		CommentBody:    raw.Comment.Body,
 		CommentUser:    raw.Comment.User.Login,
 		IssueNumber:    raw.Issue.Number,
+		IsPR:           raw.Issue.PullRequest != nil,
 		Owner:          raw.Repository.Owner.Login,
 		Repo:           raw.Repository.Name,
 		InstallationID: raw.Installation.ID,
