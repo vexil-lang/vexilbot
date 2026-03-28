@@ -1,0 +1,10 @@
+.worktrees/
+bin/
+docs/
+*.md
+*_test.go
+.git/
+.github/
+deploy/
+config.toml
+secrets/

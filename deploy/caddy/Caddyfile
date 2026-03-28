@@ -1,0 +1,8 @@
+{
+    # Caddy global options
+    email admin@vexil-lang.dev
+}
+
+bot.vexil-lang.dev {
+    reverse_proxy vexilbot:8080
+}

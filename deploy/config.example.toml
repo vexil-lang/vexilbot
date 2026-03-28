@@ -1,0 +1,24 @@
+[server]
+# Address the HTTP server listens on inside the container.
+# Caddy reverse-proxies to this — do not expose port 8080 publicly.
+listen = "0.0.0.0:8080"
+
+# GitHub sends this secret with every webhook. Generate with:
+#   openssl rand -hex 32
+webhook_secret = "REPLACE_WITH_WEBHOOK_SECRET"
+
+[github]
+# Your GitHub App ID (visible on the App settings page)
+app_id = 0
+
+# Path to the GitHub App private key PEM file inside the container.
+# Mount it as a Docker secret or volume — never bake it into the image.
+private_key_path = "/run/secrets/github_app_key"
+
+[credentials]
+# crates.io registry token for cargo publish (optional)
+cargo_registry_token = ""
+
+[llm]
+# Anthropic API key for future LLM features (optional)
+anthropic_api_key = ""
