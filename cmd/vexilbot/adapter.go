@@ -269,6 +269,15 @@ func (a *ghAdapter) MergePR(ctx context.Context, owner, repo string, number int,
 	return err
 }
 
+func (a *ghAdapter) CreateTag(ctx context.Context, owner, repo, tag, sha string) error {
+	ref := "refs/tags/" + tag
+	_, _, err := a.client.Git.CreateRef(ctx, owner, repo, &github.Reference{
+		Ref:    github.Ptr(ref),
+		Object: &github.GitObject{SHA: github.Ptr(sha)},
+	})
+	return err
+}
+
 // --- PR files ---
 
 func (a *ghAdapter) ListPRFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {

@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -144,6 +146,30 @@ func main() {
 	dispatcher := webhook.NewDispatcher()
 
 	dispatcher.OnPullRequest(func(ev webhook.PullRequestEvent) {
+		// Handle release PR merge → create tags + cargo publish
+		if ev.Action == "closed" && ev.Merged && strings.HasPrefix(ev.HeadRef, "release/workspace-") {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+				store.set(ev.Owner, ev.Repo, ev.InstallationID)
+				adapter := &ghAdapter{client: app.InstallationClient(ev.InstallationID)}
+
+				repoCfg, err := configCache.Get(ctx, ev.Owner, ev.Repo)
+				if err != nil {
+					slog.Error("get repo config for post-merge", "error", err)
+					return
+				}
+
+				runner := &execRunner{}
+				if err := release.RunPostMerge(ctx, adapter, runner, ev.Owner, ev.Repo, ev.Number, ev.HeadSHA, repoCfg.Release); err != nil {
+					slog.Error("post-merge release", "pr", ev.Number, "error", err)
+					_ = adapter.CreateComment(ctx, ev.Owner, ev.Repo, ev.Number,
+						fmt.Sprintf(":x: Post-merge release failed: %v", err))
+				}
+			}()
+			return
+		}
+
 		if ev.Action != "opened" && ev.Action != "synchronize" {
 			return
 		}
@@ -403,4 +429,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// execRunner implements release.CmdRunner by running real OS commands.
+type execRunner struct{}
+
+func (e *execRunner) Run(ctx context.Context, dir string, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }

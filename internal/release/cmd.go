@@ -22,6 +22,7 @@ type ReleaseAPI interface {
 	UpdateFile(ctx context.Context, owner, repo, path, message string, content []byte, sha, branch string) error
 	CreatePR(ctx context.Context, owner, repo, title, body, head, base string) (int, error)
 	MergePR(ctx context.Context, owner, repo string, number int, method string) error
+	CreateTag(ctx context.Context, owner, repo, tag, sha string) error
 	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
 }
 
@@ -369,6 +370,99 @@ func buildWorkspacePRBody(items []releaseItem) (string, string) {
 
 	sb.WriteString("---\n_Merging this PR will trigger `cargo publish` and `npm publish` via GitHub Actions._")
 	return title, sb.String()
+}
+
+// RunPostMerge handles post-merge actions for a release PR: creates per-crate
+// git tags and runs cargo publish in dependency order. Called when a PR with
+// branch matching "release/workspace-*" is merged.
+func RunPostMerge(ctx context.Context, api ReleaseAPI, runner CmdRunner, owner, repo string, prNumber int, mergeSHA string, cfg repoconfig.Release) error {
+	// Detect which crates have new versions by reading their Cargo.toml from the merged commit
+	var published []string
+	var tagged []string
+
+	order, err := ResolveDependencyOrder(cfg.Crates)
+	if err != nil {
+		return fmt.Errorf("resolve dependency order: %w", err)
+	}
+
+	for _, name := range order {
+		crate, ok := cfg.Crates[name]
+		if !ok || isPublishDisabled(crate.Publish) {
+			continue
+		}
+
+		// Read the crate's version from the merged code
+		filePath := crate.Path + "/Cargo.toml"
+		content, _, err := api.GetFileContent(ctx, owner, repo, filePath)
+		if err != nil {
+			slog.Error("read Cargo.toml for post-merge", "crate", name, "error", err)
+			continue
+		}
+
+		version := extractCargoVersion(string(content))
+		if version == "" {
+			slog.Error("could not extract version", "crate", name)
+			continue
+		}
+
+		tag := TagName(name, version, cfg.TagFormat)
+
+		// Create the git tag
+		if err := api.CreateTag(ctx, owner, repo, tag, mergeSHA); err != nil {
+			slog.Error("create tag", "tag", tag, "error", err)
+		} else {
+			tagged = append(tagged, tag)
+			slog.Info("created tag", "tag", tag)
+		}
+
+		// Run cargo publish (best-effort — don't stop on failure)
+		if err := PublishCrate(ctx, runner, ".", crate.Path, ""); err != nil {
+			slog.Error("cargo publish", "crate", name, "error", err)
+		} else {
+			published = append(published, name)
+			slog.Info("published crate", "name", name, "version", version)
+		}
+
+		// Brief pause for crates.io indexing
+		time.Sleep(5 * time.Second)
+	}
+
+	// Build summary
+	var sb strings.Builder
+	sb.WriteString("## Post-Merge Release\n\n")
+	if len(tagged) > 0 {
+		sb.WriteString("**Tags created:**\n")
+		for _, t := range tagged {
+			sb.WriteString(fmt.Sprintf("- `%s`\n", t))
+		}
+		sb.WriteString("\n")
+	}
+	if len(published) > 0 {
+		sb.WriteString("**Published to crates.io:**\n")
+		for _, p := range published {
+			sb.WriteString(fmt.Sprintf("- %s\n", p))
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("_Tags trigger cargo-dist (vexilc binaries) and npm publish (@vexil-lang/runtime) via GitHub Actions._")
+
+	return api.CreateComment(ctx, owner, repo, prNumber, sb.String())
+}
+
+// extractCargoVersion reads the version from a Cargo.toml string.
+func extractCargoVersion(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "version") && strings.Contains(trimmed, "=") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) == 2 {
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"`)
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 // --- internal helpers ---

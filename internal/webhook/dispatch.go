@@ -9,6 +9,8 @@ type PullRequestEvent struct {
 	Action         string
 	Number         int
 	HeadSHA        string
+	HeadRef        string // branch name
+	Merged         bool
 	UserLogin      string
 	Owner          string
 	Repo           string
@@ -95,10 +97,12 @@ func (d *Dispatcher) dispatchPullRequest(payload []byte) {
 		PullRequest struct {
 			Head struct {
 				SHA string `json:"sha"`
+				Ref string `json:"ref"`
 			} `json:"head"`
 			User struct {
 				Login string `json:"login"`
 			} `json:"user"`
+			Merged bool `json:"merged"`
 		} `json:"pull_request"`
 		Repository   repoInfo     `json:"repository"`
 		Installation installation `json:"installation"`
@@ -112,6 +116,8 @@ func (d *Dispatcher) dispatchPullRequest(payload []byte) {
 		Action:         raw.Action,
 		Number:         raw.Number,
 		HeadSHA:        raw.PullRequest.Head.SHA,
+		HeadRef:        raw.PullRequest.Head.Ref,
+		Merged:         raw.PullRequest.Merged,
 		UserLogin:      raw.PullRequest.User.Login,
 		Owner:          raw.Repository.Owner.Login,
 		Repo:           raw.Repository.Name,
