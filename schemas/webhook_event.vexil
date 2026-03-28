@@ -1,17 +1,17 @@
 namespace webhookevent
 
-enum EventKind : u4 {
-    PullRequest  = 0
-    IssueComment = 1
-    Issues       = 2
-    Push         = 3
-    Unknown      = 15
+enum EventKind : u8 {
+    PullRequest  @0
+    IssueComment @1
+    Issues       @2
+    Push         @3
+    Unknown      @15
 }
 
 message WebhookEvent {
-    0: ts     u64
-    1: kind   EventKind
-    2: owner  string
-    3: repo   string
-    4: action string
+    ts     @0 : u64
+    kind   @1 : EventKind
+    owner  @2 : string
+    repo   @3 : string
+    action @4 : string
 }
