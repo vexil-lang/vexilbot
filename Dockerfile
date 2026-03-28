@@ -11,7 +11,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /vexilbot ./cmd/vexilbot
 
 # ---- runtime ----
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:debug-nonroot
 
 COPY --from=builder /vexilbot /vexilbot
 

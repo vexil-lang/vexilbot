@@ -6,3 +6,5 @@ docs/
 .git/
 .github/
 deploy/
+config.toml
+secrets/
