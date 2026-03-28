@@ -10,13 +10,18 @@ import (
 	"sync"
 	"time"
 
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
 	"github.com/vexil-lang/vexilbot/internal/ghclient"
 	"github.com/vexil-lang/vexilbot/internal/labeler"
+	"github.com/vexil-lang/vexilbot/internal/logstore"
 	"github.com/vexil-lang/vexilbot/internal/policy"
 	"github.com/vexil-lang/vexilbot/internal/release"
 	"github.com/vexil-lang/vexilbot/internal/repoconfig"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/triage"
+	"github.com/vexil-lang/vexilbot/internal/vexstore"
+	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/logentry"
+	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/webhookevent"
 	"github.com/vexil-lang/vexilbot/internal/webhook"
 	"github.com/vexil-lang/vexilbot/internal/welcome"
 )
@@ -48,7 +53,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := os.MkdirAll("data", 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "create data dir: %v\n", err)
+		os.Exit(1)
+	}
+	logStore, err := vexstore.OpenAppendStore("data/logs.vxb", logentry.SchemaHash)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open log store: %v\n", err)
+		os.Exit(1)
+	}
+	defer logStore.Close()
+	eventStore, err := vexstore.OpenAppendStore("data/events.vxb", webhookevent.SchemaHash)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open event store: %v\n", err)
+		os.Exit(1)
+	}
+	defer eventStore.Close()
+	logger := slog.New(logstore.NewHandler(logStore, slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
 
 	cfg, err := serverconfig.Load(os.Args[1])
@@ -87,6 +108,17 @@ func main() {
 		go func() {
 			ctx := context.Background()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
+			wev := &webhookevent.WebhookEvent{
+				Ts:     uint64(time.Now().UnixNano()),
+				Kind:   webhookevent.EventKindPullRequest,
+				Owner:  ev.Owner,
+				Repo:   ev.Repo,
+				Action: ev.Action,
+			}
+			bw := vexil.NewBitWriter()
+			if wev.Pack(bw) == nil {
+				_ = eventStore.Append(bw.Finish())
+			}
 
 			repoCfg, err := configCache.Get(ctx, ev.Owner, ev.Repo)
 			if err != nil {
@@ -131,6 +163,17 @@ func main() {
 		go func() {
 			ctx := context.Background()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
+			wev := &webhookevent.WebhookEvent{
+				Ts:     uint64(time.Now().UnixNano()),
+				Kind:   webhookevent.EventKindIssueComment,
+				Owner:  ev.Owner,
+				Repo:   ev.Repo,
+				Action: ev.Action,
+			}
+			bw := vexil.NewBitWriter()
+			if wev.Pack(bw) == nil {
+				_ = eventStore.Append(bw.Finish())
+			}
 
 			cmd, ok := triage.ParseCommand(ev.CommentBody, cfg.Server.BotName)
 			if !ok {
@@ -173,6 +216,17 @@ func main() {
 		go func() {
 			ctx := context.Background()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
+			wev := &webhookevent.WebhookEvent{
+				Ts:     uint64(time.Now().UnixNano()),
+				Kind:   webhookevent.EventKindIssues,
+				Owner:  ev.Owner,
+				Repo:   ev.Repo,
+				Action: ev.Action,
+			}
+			bw := vexil.NewBitWriter()
+			if wev.Pack(bw) == nil {
+				_ = eventStore.Append(bw.Finish())
+			}
 
 			repoCfg, err := configCache.Get(ctx, ev.Owner, ev.Repo)
 			if err != nil {
