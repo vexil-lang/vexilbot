@@ -1,0 +1,14 @@
+namespace scheduledrelease
+
+enum BumpLevel : u2 {
+    Patch = 0
+    Minor = 1
+    Major = 2
+}
+
+message ScheduledRelease {
+    0: name   string
+    1: run_at u64
+    2: bump   BumpLevel
+    3: kind   u1   -- 0=cargo 1=npm
+}
