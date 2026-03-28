@@ -1,0 +1,46 @@
+<!-- internal/dashboard/templates/logs.html -->
+{{define "logs"}}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Logs — vexilbot</title>
+{{template "base-css" .}}
+</head><body>
+{{template "nav" .}}
+<div class="content">
+<h2>Logs</h2>
+<form method="get" action="/logs" style="margin-bottom:16px">
+  <div class="form-row">
+    <select name="level" onchange="this.form.submit()">
+      <option value="" {{if eq .FilterLevel ""}}selected{{end}}>All levels</option>
+      <option value="debug" {{if eq .FilterLevel "debug"}}selected{{end}}>DEBUG</option>
+      <option value="info"  {{if eq .FilterLevel "info"}}selected{{end}}>INFO</option>
+      <option value="warn"  {{if eq .FilterLevel "warn"}}selected{{end}}>WARN</option>
+      <option value="error" {{if eq .FilterLevel "error"}}selected{{end}}>ERROR</option>
+    </select>
+    <input type="text" name="owner" placeholder="owner" value="{{.FilterOwner}}">
+    <input type="text" name="repo"  placeholder="repo"  value="{{.FilterRepo}}">
+    <button type="submit">Filter</button>
+  </div>
+</form>
+{{template "logs-rows" .Rows}}
+</div>
+</body></html>
+{{end}}
+
+{{define "logs-rows"}}
+<table id="log-table" hx-get="/logs-rows" hx-trigger="every 3s" hx-swap="outerHTML">
+  <thead><tr><th>Time</th><th>Level</th><th>Message</th><th>Owner</th><th>Repo</th></tr></thead>
+  <tbody>
+  {{range .}}
+  <tr>
+    <td style="font-family:monospace;color:#8b949e">{{.Time}}</td>
+    <td><span class="badge badge-{{lower .Level}}">{{.Level}}</span></td>
+    <td>{{.Msg}}</td>
+    <td>{{.Owner}}</td>
+    <td>{{.Repo}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5" style="color:#8b949e;text-align:center">No log entries</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
