@@ -131,7 +131,7 @@ func main() {
 			ctx := context.Background()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
 
-			cmd, ok := triage.ParseCommand(ev.CommentBody, "vexil-bot")
+			cmd, ok := triage.ParseCommand(ev.CommentBody, cfg.Server.BotName)
 			if !ok {
 				return
 			}

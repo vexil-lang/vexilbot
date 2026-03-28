@@ -17,6 +17,7 @@ type Config struct {
 type Server struct {
 	Listen        string `toml:"listen"`
 	WebhookSecret string `toml:"webhook_secret"`
+	BotName       string `toml:"bot_name"`
 }
 
 type GitHub struct {
@@ -59,6 +60,9 @@ func (c *Config) validate() error {
 	}
 	if c.GitHub.PrivateKeyPath == "" {
 		return fmt.Errorf("github.private_key_path is required")
+	}
+	if c.Server.BotName == "" {
+		return fmt.Errorf("server.bot_name is required")
 	}
 	return nil
 }

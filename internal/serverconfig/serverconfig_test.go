@@ -13,6 +13,7 @@ func TestLoad_ValidConfig(t *testing.T) {
 [server]
 listen = "127.0.0.1:8080"
 webhook_secret = "whsec_test123"
+bot_name = "vexil-bot"
 
 [github]
 app_id = 12345
@@ -46,6 +47,9 @@ anthropic_api_key = "sk-ant-test"
 	}
 	if cfg.LLM.AnthropicAPIKey != "sk-ant-test" {
 		t.Errorf("anthropic_api_key = %q, want %q", cfg.LLM.AnthropicAPIKey, "sk-ant-test")
+	}
+	if cfg.Server.BotName != "vexil-bot" {
+		t.Errorf("bot_name = %q, want %q", cfg.Server.BotName, "vexil-bot")
 	}
 }
 
