@@ -66,6 +66,50 @@ func ResolveDependencyOrder(crates map[string]repoconfig.CrateEntry) ([]string, 
 	return order, nil
 }
 
+// ResolvePkgDependencyOrder returns npm package names in topological order (dependencies first).
+func ResolvePkgDependencyOrder(packages map[string]repoconfig.PackageEntry) ([]string, error) {
+	inDegree := make(map[string]int)
+	dependents := make(map[string][]string)
+
+	for name := range packages {
+		inDegree[name] = 0
+	}
+	for name, entry := range packages {
+		for _, dep := range entry.DependsOn {
+			if _, ok := packages[dep]; ok {
+				inDegree[name]++
+				dependents[dep] = append(dependents[dep], name)
+			}
+		}
+	}
+
+	var queue []string
+	for name, degree := range inDegree {
+		if degree == 0 {
+			queue = append(queue, name)
+		}
+	}
+
+	var order []string
+	for len(queue) > 0 {
+		sortStrings(queue)
+		node := queue[0]
+		queue = queue[1:]
+		order = append(order, node)
+		for _, dep := range dependents[node] {
+			inDegree[dep]--
+			if inDegree[dep] == 0 {
+				queue = append(queue, dep)
+			}
+		}
+	}
+
+	if len(order) != len(packages) {
+		return nil, fmt.Errorf("cyclic dependency detected in release packages")
+	}
+	return order, nil
+}
+
 func sortStrings(s []string) {
 	for i := 1; i < len(s); i++ {
 		for j := i; j > 0 && s[j] < s[j-1]; j-- {

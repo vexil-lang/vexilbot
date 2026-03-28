@@ -225,12 +225,15 @@ func (a *ghAdapter) CreateBranch(ctx context.Context, owner, repo, branch, sha s
 }
 
 func (a *ghAdapter) UpdateFile(ctx context.Context, owner, repo, path, message string, content []byte, sha, branch string) error {
-	_, _, err := a.client.Repositories.UpdateFile(ctx, owner, repo, path, &github.RepositoryContentFileOptions{
+	opts := &github.RepositoryContentFileOptions{
 		Message: github.Ptr(message),
 		Content: content,
-		SHA:     github.Ptr(sha),
 		Branch:  github.Ptr(branch),
-	})
+	}
+	if sha != "" {
+		opts.SHA = github.Ptr(sha)
+	}
+	_, _, err := a.client.Repositories.UpdateFile(ctx, owner, repo, path, opts)
 	return err
 }
 

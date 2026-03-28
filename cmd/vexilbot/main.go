@@ -208,20 +208,17 @@ func main() {
 }
 
 func handleRelease(ctx context.Context, adapter *ghAdapter, repoCfg *repoconfig.Config, owner, repo string, issueNumber int, args []string) {
-	subCmd := "status"
-	if len(args) > 0 {
-		subCmd = args[0]
-	}
-
 	var err error
-	switch subCmd {
-	case "status":
+	switch {
+	case len(args) == 0:
+		err = release.RunWorkspaceRelease(ctx, adapter, owner, repo, issueNumber, repoCfg.Release)
+	case args[0] == "status":
 		err = release.RunStatus(ctx, adapter, owner, repo, issueNumber, repoCfg.Release)
 	default:
-		err = release.RunRelease(ctx, adapter, owner, repo, subCmd, issueNumber, repoCfg.Release)
+		err = release.RunRelease(ctx, adapter, owner, repo, args[0], issueNumber, repoCfg.Release)
 	}
 	if err != nil {
-		slog.Error("release command", "sub", subCmd, "error", err)
+		slog.Error("release command", "args", args, "error", err)
 	}
 }
 
