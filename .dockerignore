@@ -1,0 +1,8 @@
+.worktrees/
+bin/
+docs/
+*.md
+*_test.go
+.git/
+.github/
+deploy/
