@@ -56,6 +56,10 @@ func RunStatus(ctx context.Context, api ReleaseAPI, owner, repo string, issueNum
 // RunRelease creates a release PR for the named crate or npm package.
 func RunRelease(ctx context.Context, api ReleaseAPI, owner, repo, name string, issueNumber int, cfg repoconfig.Release) error {
 	if crate, ok := cfg.Crates[name]; ok {
+		if isPublishDisabled(crate.Publish) {
+			return api.CreateComment(ctx, owner, repo, issueNumber,
+				fmt.Sprintf(":x: **%s** has `publish = false` — skipping release.", name))
+		}
 		prNum, err := createCratePR(ctx, api, owner, repo, name, crate, cfg)
 		if err != nil {
 			return err
@@ -96,10 +100,15 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 			return fmt.Errorf("resolve crate dependency order: %w", err)
 		}
 		for _, name := range order {
+			crate := cfg.Crates[name]
+			// Skip crates that are not publishable or not tracked
+			if isPublishDisabled(crate.Publish) || !crate.Track {
+				continue
+			}
 			if len(results[name].Commits) == 0 {
 				continue
 			}
-			prNum, err := createCratePR(ctx, api, owner, repo, name, cfg.Crates[name], cfg)
+			prNum, err := createCratePR(ctx, api, owner, repo, name, crate, cfg)
 			if err != nil {
 				return fmt.Errorf("release crate %s: %w", name, err)
 			}
@@ -139,6 +148,14 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 
 // --- internal helpers ---
 
+// fileUpdate holds a pending file change to commit to the release branch.
+type fileUpdate struct {
+	path    string
+	content string
+	sha     string
+	message string
+}
+
 func createCratePR(ctx context.Context, api ReleaseAPI, owner, repo, name string, crate repoconfig.CrateEntry, cfg repoconfig.Release) (int, error) {
 	results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
 	if err != nil {
@@ -152,6 +169,8 @@ func createCratePR(ctx context.Context, api ReleaseAPI, owner, repo, name string
 	if err != nil {
 		return 0, err
 	}
+
+	// Bump the crate's own version
 	filePath := crate.Path + "/Cargo.toml"
 	content, fileSHA, err := api.GetFileContent(ctx, owner, repo, filePath)
 	if err != nil {
@@ -161,7 +180,38 @@ func createCratePR(ctx context.Context, api ReleaseAPI, owner, repo, name string
 	if err != nil {
 		return 0, fmt.Errorf("bump version: %w", err)
 	}
-	return openReleasePR(ctx, api, owner, repo, name, filePath, updated, fileSHA, result, newVersion, "cargo publish")
+
+	// Collect dependent crate Cargo.toml updates — any crate that lists this
+	// crate in depends_on needs its version constraint updated.
+	versionConstraint := fmt.Sprintf("^%s", newVersion)
+	var depUpdates []fileUpdate
+	for depName, depEntry := range cfg.Crates {
+		if depName == name {
+			continue
+		}
+		for _, dep := range depEntry.DependsOn {
+			if dep == name {
+				depPath := depEntry.Path + "/Cargo.toml"
+				depContent, depSHA, err := api.GetFileContent(ctx, owner, repo, depPath)
+				if err != nil {
+					continue // best-effort: skip if file can't be read
+				}
+				depUpdated, err := BumpCargoDependency(string(depContent), name, versionConstraint)
+				if err != nil || depUpdated == string(depContent) {
+					continue // no change needed or error
+				}
+				depUpdates = append(depUpdates, fileUpdate{
+					path:    depPath,
+					content: depUpdated,
+					sha:     depSHA,
+					message: fmt.Sprintf("chore(%s): update %s dependency to %s", depName, name, versionConstraint),
+				})
+				break
+			}
+		}
+	}
+
+	return openReleasePR(ctx, api, owner, repo, name, filePath, updated, fileSHA, result, newVersion, "cargo publish", depUpdates)
 }
 
 func createNpmPR(ctx context.Context, api ReleaseAPI, owner, repo, name string, pkg repoconfig.PackageEntry, cfg repoconfig.Release) (int, error) {
@@ -186,12 +236,13 @@ func createNpmPR(ctx context.Context, api ReleaseAPI, owner, repo, name string, 
 	if err != nil {
 		return 0, fmt.Errorf("bump version: %w", err)
 	}
-	return openReleasePR(ctx, api, owner, repo, name, filePath, updated, fileSHA, result, newVersion, "npm publish")
+	return openReleasePR(ctx, api, owner, repo, name, filePath, updated, fileSHA, result, newVersion, "npm publish", nil)
 }
 
-// openReleasePR creates a release branch, commits the version bump and an
-// updated CHANGELOG.md, then opens the PR. Returns the PR number.
-func openReleasePR(ctx context.Context, api ReleaseAPI, owner, repo, name, filePath, updated, fileSHA string, result ChangeResult, newVersion Version, publishHint string) (int, error) {
+// openReleasePR creates a release branch, commits the version bump, any
+// dependency constraint updates, and an updated CHANGELOG.md, then opens
+// the PR. Returns the PR number.
+func openReleasePR(ctx context.Context, api ReleaseAPI, owner, repo, name, filePath, updated, fileSHA string, result ChangeResult, newVersion Version, publishHint string, depUpdates []fileUpdate) (int, error) {
 	defaultBranch, err := api.GetDefaultBranch(ctx, owner, repo)
 	if err != nil {
 		return 0, fmt.Errorf("get default branch: %w", err)
@@ -210,6 +261,11 @@ func openReleasePR(ctx context.Context, api ReleaseAPI, owner, repo, name, fileP
 	commitMsg := fmt.Sprintf("chore(%s): bump version to %s", name, newVersion)
 	if err := api.UpdateFile(ctx, owner, repo, filePath, commitMsg, []byte(updated), fileSHA, releaseBranch); err != nil {
 		return 0, fmt.Errorf("commit version bump: %w", err)
+	}
+
+	// Commit dependency constraint updates in dependent crates
+	for _, du := range depUpdates {
+		_ = api.UpdateFile(ctx, owner, repo, du.path, du.message, []byte(du.content), du.sha, releaseBranch)
 	}
 
 	// Commit CHANGELOG.md
@@ -234,6 +290,18 @@ func openReleasePR(ctx context.Context, api ReleaseAPI, owner, repo, name, fileP
 		return 0, fmt.Errorf("create PR: %w", err)
 	}
 	return prNumber, nil
+}
+
+// isPublishDisabled checks if a CrateEntry's Publish field is false.
+// Publish is interface{} — can be string ("crates.io") or bool (false).
+func isPublishDisabled(publish interface{}) bool {
+	if publish == nil {
+		return false // nil means default (publishable)
+	}
+	if b, ok := publish.(bool); ok {
+		return !b
+	}
+	return false // string value means a registry name
 }
 
 func computeNewVersion(result ChangeResult) (Version, error) {
