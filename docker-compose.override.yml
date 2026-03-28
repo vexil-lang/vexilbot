@@ -7,6 +7,10 @@ services:
     volumes:
       - ./deploy/config.example.toml:/etc/vexilbot/config.toml:ro
       - /dev/null:/run/secrets/github_app_key:ro
+      - vexilbot-data:/data
 
   caddy:
     profiles: ["prod"]   # skip Caddy in dev
+
+volumes:
+  vexilbot-data:

@@ -7,7 +7,7 @@ listen = "0.0.0.0:8080"
 #   openssl rand -hex 32
 webhook_secret = "REPLACE_WITH_WEBHOOK_SECRET"
 
-# data_dir = "data"  # Directory for .vxb binary store files (default: "data")
+# data_dir = "/data"  # Use "/data" when running in Docker (matches volume mount); default: "data"
 # dashboard_port = 8081  # Dashboard listen port on 127.0.0.1 (default: 8081)
 
 [github]

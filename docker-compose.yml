@@ -8,6 +8,7 @@ services:
     volumes:
       - ./config.toml:/etc/vexilbot/config.toml:ro
       - ./secrets/github_app_key.pem:/run/secrets/github_app_key:ro
+      - vexilbot-data:/data
     healthcheck:
       test: ["CMD", "/busybox/wget", "-qO-", "http://localhost:8080/healthz"]
       interval: 30s
@@ -38,3 +39,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  vexilbot-data:
