@@ -5,6 +5,8 @@ services:
     # No published ports — Caddy reaches vexilbot on the internal network
     expose:
       - "8080"
+    ports:
+      - "127.0.0.1:8081:8081"  # Dashboard — SSH tunnel only
     volumes:
       - ./config.toml:/etc/vexilbot/config.toml:ro
       - ./secrets/github_app_key.pem:/run/secrets/github_app_key:ro
