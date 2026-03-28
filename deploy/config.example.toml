@@ -8,6 +8,7 @@ listen = "0.0.0.0:8080"
 webhook_secret = "REPLACE_WITH_WEBHOOK_SECRET"
 
 # data_dir = "data"  # Directory for .vxb binary store files (default: "data")
+# dashboard_port = 8081  # Dashboard listen port on 127.0.0.1 (0 = disabled, default: 8081)
 
 [github]
 # Your GitHub App ID (visible on the App settings page)

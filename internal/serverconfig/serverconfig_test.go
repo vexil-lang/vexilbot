@@ -72,6 +72,47 @@ func TestLoad_FileNotFound(t *testing.T) {
 	}
 }
 
+func TestDashboardPortDefault(t *testing.T) {
+	content := `
+[server]
+listen = "0.0.0.0:8080"
+webhook_secret = "s"
+bot_name = "vexilbot"
+[github]
+app_id = 1
+private_key_path = "/tmp/key"
+`
+	path := writeTempFile(t, content)
+	cfg, err := serverconfig.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Server.DashboardPort != 8081 {
+		t.Errorf("want DashboardPort=8081, got %d", cfg.Server.DashboardPort)
+	}
+}
+
+func TestDashboardPortConfigured(t *testing.T) {
+	content := `
+[server]
+listen = "0.0.0.0:8080"
+webhook_secret = "s"
+bot_name = "vexilbot"
+dashboard_port = 9090
+[github]
+app_id = 1
+private_key_path = "/tmp/key"
+`
+	path := writeTempFile(t, content)
+	cfg, err := serverconfig.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Server.DashboardPort != 9090 {
+		t.Errorf("want DashboardPort=9090, got %d", cfg.Server.DashboardPort)
+	}
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()

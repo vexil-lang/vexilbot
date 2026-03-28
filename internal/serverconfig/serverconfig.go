@@ -19,6 +19,7 @@ type Server struct {
 	WebhookSecret string `toml:"webhook_secret"`
 	BotName       string `toml:"bot_name"`
 	DataDir       string `toml:"data_dir"`
+	DashboardPort int    `toml:"dashboard_port"`
 }
 
 type GitHub struct {
@@ -51,6 +52,10 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Server.DataDir == "" {
 		cfg.Server.DataDir = "data"
+	}
+
+	if cfg.Server.DashboardPort == 0 {
+		cfg.Server.DashboardPort = 8081
 	}
 
 	return &cfg, nil
