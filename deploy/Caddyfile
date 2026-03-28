@@ -1,0 +1,3 @@
+bot.vexil-lang.dev {
+    reverse_proxy localhost:8080
+}

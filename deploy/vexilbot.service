@@ -1,0 +1,25 @@
+[Unit]
+Description=vexilbot GitHub App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vexilbot
+Group=vexilbot
+ExecStart=/usr/local/bin/vexilbot /etc/vexilbot/config.toml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vexilbot
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/vexilbot
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
