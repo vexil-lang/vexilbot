@@ -1,19 +1,27 @@
--- ScheduledRelease is defined here for documentation purposes.
--- Codegen is pending: the vexilc syntax for sub-byte fields (u1, u2) and enum
--- backing types may differ from the other schemas. Update and run codegen
--- when the CLI syntax is confirmed.
-
 namespace scheduledrelease
 
-enum BumpLevel : u2 {
-    Patch = 0
-    Minor = 1
-    Major = 2
+enum BumpLevel : u8 {
+  Patch @0
+  Minor @1
+  Major @2
+}
+
+enum ReleaseStatus : u8 {
+  Pending   @0
+  Confirmed @1
+  Running   @2
+  Done      @3
+  Cancelled @4
 }
 
 message ScheduledRelease {
-    0: name   string
-    1: run_at u64
-    2: bump   BumpLevel
-    3: kind   u1   -- 0=cargo 1=npm
+  id         @0 : string
+  package    @1 : string
+  bump       @2 : BumpLevel
+  run_at     @3 : u64
+  auto_run   @4 : bool
+  status     @5 : ReleaseStatus
+  created_at @6 : u64
+  owner      @7 : string
+  repo       @8 : string
 }
