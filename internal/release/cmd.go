@@ -117,7 +117,7 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 		}
 		for _, name := range order {
 			crate := cfg.Crates[name]
-			if isPublishDisabled(crate.Publish) || !crate.Track {
+			if isPublishDisabled(crate.Publish) {
 				continue
 			}
 			result := results[name]
