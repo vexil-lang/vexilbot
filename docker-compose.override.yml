@@ -1,0 +1,12 @@
+# Local dev: use local image, expose port directly, no TLS
+services:
+  vexilbot:
+    image: vexilbot:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./deploy/config.example.toml:/etc/vexilbot/config.toml:ro
+      - /dev/null:/run/secrets/github_app_key:ro
+
+  caddy:
+    profiles: ["prod"]   # skip Caddy in dev
