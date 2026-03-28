@@ -4,9 +4,6 @@ package dashboard
 
 import "net/http"
 
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
 func (s *Server) handleReleases(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not implemented", http.StatusNotImplemented)
 }

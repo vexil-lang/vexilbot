@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vexil-lang/vexilbot/internal/dashboard"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
@@ -102,6 +103,44 @@ func TestLogsFilterLevel(t *testing.T) {
 
 // helper: encode and append a LogEntry to a store
 func writeLogRecord(t *testing.T, store *vexstore.AppendStore, e logentry.LogEntry) {
+	t.Helper()
+	w := vexilruntime.NewBitWriter()
+	if err := e.Pack(w); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Append(w.Finish()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEventsOK(t *testing.T) {
+	evStore := openTestStore(t, webhookevent.SchemaHash)
+	writeEventRecord(t, evStore, webhookevent.WebhookEvent{
+		Ts: uint64(time.Now().UnixNano()), Kind: webhookevent.EventKindPush, Owner: "o", Repo: "r",
+	})
+
+	srv := dashboard.New(dashboard.Deps{
+		LogStore:        openTestStore(t, logentry.SchemaHash),
+		EventStore:      evStore,
+		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
+		DataDir:         t.TempDir(),
+		ServerConfig:    &serverconfig.Config{},
+		KnownRepos:      func() []string { return nil },
+		RunRelease:      func(_ context.Context, _, _, _ string) (int, error) { return 0, nil },
+		FetchRepoConfig: func(_ context.Context, _, _ string) ([]byte, error) { return nil, nil },
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/events", nil)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Push") {
+		t.Error("expected 'Push' in events response")
+	}
+}
+
+func writeEventRecord(t *testing.T, store *vexstore.AppendStore, e webhookevent.WebhookEvent) {
 	t.Helper()
 	w := vexilruntime.NewBitWriter()
 	if err := e.Pack(w); err != nil {
