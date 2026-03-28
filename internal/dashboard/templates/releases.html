@@ -1,0 +1,66 @@
+<!-- internal/dashboard/templates/releases.html -->
+{{define "releases"}}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Releases — vexilbot</title>
+{{template "base-css" .}}
+</head><body>
+{{template "nav" .}}
+<div class="content">
+<h2>Scheduled Releases</h2>
+<table>
+  <thead><tr><th>Package</th><th>Bump</th><th>Owner/Repo</th><th>Run At</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr>
+    <td>{{.Package}}</td>
+    <td>{{.Bump}}</td>
+    <td>{{.Owner}}/{{.Repo}}</td>
+    <td style="font-family:monospace;color:#8b949e">{{.RunAt}}</td>
+    <td>
+      {{if .AutoRun}}<span class="badge badge-auto">auto</span>
+      {{else}}<span class="badge badge-manual">manual</span>{{end}}
+    </td>
+    <td>{{.Status}}</td>
+    <td style="display:flex;gap:6px">
+      {{if eq .Status "pending"}}
+        <form method="post" action="/releases/{{.ID}}/run">
+          <button class="primary" type="submit">Run now</button>
+        </form>
+        {{if not .AutoRun}}
+        <form method="post" action="/releases/{{.ID}}/confirm">
+          <button type="submit">Confirm</button>
+        </form>
+        {{end}}
+      {{end}}
+      <form method="post" action="/releases/{{.ID}}/cancel">
+        <button class="danger" type="submit">Cancel</button>
+      </form>
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="7" style="color:#8b949e;text-align:center">No pending releases</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<details style="margin-top:24px">
+  <summary style="cursor:pointer;color:#58a6ff;font-size:13px">+ Schedule a release</summary>
+  <form method="post" action="/releases" style="margin-top:12px;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px">
+    <div class="form-row">
+      <input type="text" name="owner" placeholder="owner" required>
+      <input type="text" name="repo"  placeholder="repo"  required>
+      <input type="text" name="package" placeholder="package / crate" required>
+      <select name="bump">
+        <option value="patch">patch</option>
+        <option value="minor">minor</option>
+        <option value="major">major</option>
+      </select>
+      <input type="datetime-local" name="run_at" required>
+      <label><input type="checkbox" name="auto_run"> Auto-run</label>
+      <button class="primary" type="submit">Schedule</button>
+    </div>
+  </form>
+</details>
+</div>
+</body></html>
+{{end}}

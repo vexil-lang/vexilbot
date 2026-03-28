@@ -150,3 +150,25 @@ func writeEventRecord(t *testing.T, store *vexstore.AppendStore, e webhookevent.
 		t.Fatal(err)
 	}
 }
+
+func TestReleasesOK(t *testing.T) {
+	srv := newTestServer(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/releases", nil)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReleasesCreate(t *testing.T) {
+	srv := newTestServer(t)
+	form := "package=mylib&bump=patch&run_at=2026-04-01T10%3A00&auto_run=on&owner=o&repo=r"
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/releases", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Errorf("want 302, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
