@@ -11,47 +11,47 @@ type ContribAPI interface {
 }
 
 // MaybeWelcomePR posts a welcome message on a PR if the author is a first-time contributor.
+// CountUserPRs is expected to include the current PR in its count, so > 1 means prior PRs exist.
 func MaybeWelcomePR(ctx context.Context, api ContribAPI, owner, repo, user string, number int, message string) error {
 	if message == "" {
 		return nil
 	}
-	isFirst, err := isFirstTimeContributor(ctx, api, owner, repo, user)
+	prs, err := api.CountUserPRs(ctx, owner, repo, user)
 	if err != nil {
 		return err
 	}
-	if !isFirst {
+	if prs > 1 {
+		return nil
+	}
+	issues, err := api.CountUserIssues(ctx, owner, repo, user)
+	if err != nil {
+		return err
+	}
+	if issues > 0 {
 		return nil
 	}
 	return api.CreateComment(ctx, owner, repo, number, message)
 }
 
 // MaybeWelcomeIssue posts a welcome message on an issue if the author is a first-time contributor.
+// CountUserIssues is expected to include the current issue in its count, so > 1 means prior issues exist.
 func MaybeWelcomeIssue(ctx context.Context, api ContribAPI, owner, repo, user string, number int, message string) error {
 	if message == "" {
 		return nil
 	}
-	isFirst, err := isFirstTimeContributor(ctx, api, owner, repo, user)
+	prs, err := api.CountUserPRs(ctx, owner, repo, user)
 	if err != nil {
 		return err
 	}
-	if !isFirst {
+	if prs > 0 {
+		return nil
+	}
+	issues, err := api.CountUserIssues(ctx, owner, repo, user)
+	if err != nil {
+		return err
+	}
+	if issues > 1 {
 		return nil
 	}
 	return api.CreateComment(ctx, owner, repo, number, message)
-}
-
-func isFirstTimeContributor(ctx context.Context, api ContribAPI, owner, repo, user string) (bool, error) {
-	prs, err := api.CountUserPRs(ctx, owner, repo, user)
-	if err != nil {
-		return false, err
-	}
-	if prs > 0 {
-		return false, nil
-	}
-
-	issues, err := api.CountUserIssues(ctx, owner, repo, user)
-	if err != nil {
-		return false, err
-	}
-	return issues == 0, nil
 }

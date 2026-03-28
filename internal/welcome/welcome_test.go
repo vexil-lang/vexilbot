@@ -33,7 +33,8 @@ func (m *mockContribAPI) CreateComment(ctx context.Context, owner, repo string, 
 }
 
 func TestWelcomePR_FirstTime(t *testing.T) {
-	api := &mockContribAPI{prCount: 0, issueCount: 0}
+	// prCount: 1 because the current PR is already counted by the GitHub API.
+	api := &mockContribAPI{prCount: 1, issueCount: 0}
 	err := welcome.MaybeWelcomePR(context.Background(), api, "org", "repo", "alice", 1, "Welcome!")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -58,7 +59,8 @@ func TestWelcomePR_ReturningContributor(t *testing.T) {
 }
 
 func TestWelcomeIssue_FirstTime(t *testing.T) {
-	api := &mockContribAPI{prCount: 0, issueCount: 0}
+	// issueCount: 1 because the current issue is already counted by the GitHub API.
+	api := &mockContribAPI{prCount: 0, issueCount: 1}
 	err := welcome.MaybeWelcomeIssue(context.Background(), api, "org", "repo", "carol", 10, "Thanks!")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
