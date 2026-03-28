@@ -1,0 +1,30 @@
+<!-- internal/dashboard/templates/storage.html -->
+{{define "storage"}}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Storage — vexilbot</title>
+{{template "base-css" .}}
+</head><body>
+{{template "nav" .}}
+<div class="content">
+<h2>Storage</h2>
+<table>
+  <thead><tr><th>File</th><th>Size</th><th>Records</th><th>Schema (8 chars)</th><th>Oldest</th><th>Newest</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr>
+    <td style="font-family:monospace">{{.File}}</td>
+    <td>{{.Size}}</td>
+    <td>{{.Records}}</td>
+    <td style="font-family:monospace;color:#8b949e">{{.SchemaHash}}</td>
+    <td style="color:#8b949e">{{if .Oldest}}{{.Oldest}}{{else}}—{{end}}</td>
+    <td style="color:#8b949e">{{if .Newest}}{{.Newest}}{{else}}—{{end}}</td>
+  </tr>
+  {{if .Error}}<tr><td colspan="6" style="color:#f85149">{{.Error}}</td></tr>{{end}}
+  {{else}}
+  <tr><td colspan="6" style="color:#8b949e;text-align:center">No .vxb files in data dir</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</body></html>
+{{end}}

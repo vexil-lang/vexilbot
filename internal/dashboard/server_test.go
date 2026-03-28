@@ -185,3 +185,37 @@ func TestReleasesCreate(t *testing.T) {
 		t.Errorf("want 302, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestStorageOK(t *testing.T) {
+	dir := t.TempDir()
+	// Create a test .vxb file in the dir
+	store, err := vexstore.OpenAppendStore(dir+"/test.vxb", logentry.SchemaHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLogRecord(t, store, logentry.LogEntry{Ts: 1000, Level: logentry.LogLevelInfo, Msg: "hi"})
+	store.Close()
+
+	srv := dashboard.New(dashboard.Deps{
+		LogStore:        openTestStore(t, logentry.SchemaHash),
+		EventStore:      openTestStore(t, webhookevent.SchemaHash),
+		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
+		DataDir:         dir,
+		ServerConfig:    &serverconfig.Config{},
+		KnownRepos:      func() []string { return nil },
+		RunRelease:      func(_ context.Context, _, _, _ string) (int, error) { return 0, nil },
+		FetchRepoConfig: func(_ context.Context, _, _ string) ([]byte, error) { return nil, nil },
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/storage", nil)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "test.vxb") {
+		t.Error("expected 'test.vxb' in storage response")
+	}
+	if !strings.Contains(rec.Body.String(), "1") {
+		t.Error("expected record count of 1 in storage response")
+	}
+}
