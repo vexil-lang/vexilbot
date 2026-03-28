@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v68/github"
+	"github.com/vexil-lang/vexilbot/internal/release"
 )
 
 // ghAdapter wraps a GitHub installation client and implements all feature interfaces.
@@ -118,6 +119,132 @@ func (a *ghAdapter) SetCommitStatus(ctx context.Context, owner, repo, sha, state
 		Description: github.Ptr(description),
 	})
 	return err
+}
+
+// --- release.GitAPI ---
+
+func (a *ghAdapter) ListTags(ctx context.Context, owner, repo string) ([]string, error) {
+	var tags []string
+	opts := &github.ListOptions{PerPage: 100}
+	for {
+		page, resp, err := a.client.Repositories.ListTags(ctx, owner, repo, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range page {
+			tags = append(tags, t.GetName())
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return tags, nil
+}
+
+func (a *ghAdapter) CommitsSinceTag(ctx context.Context, owner, repo, tag, path string) ([]release.Commit, error) {
+	var tagSHA string
+	if tag != "" {
+		ref, _, err := a.client.Git.GetRef(ctx, owner, repo, "tags/"+tag)
+		if err != nil {
+			return nil, fmt.Errorf("resolve tag %s: %w", tag, err)
+		}
+		tagSHA = ref.Object.GetSHA()
+		// Dereference annotated tags to the underlying commit SHA.
+		if ref.Object.GetType() == "tag" {
+			tagObj, _, err := a.client.Git.GetTag(ctx, owner, repo, tagSHA)
+			if err == nil {
+				tagSHA = tagObj.Object.GetSHA()
+			}
+		}
+	}
+
+	opts := &github.CommitsListOptions{
+		Path:        path,
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	var commits []release.Commit
+	for {
+		page, resp, err := a.client.Repositories.ListCommits(ctx, owner, repo, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range page {
+			if tagSHA != "" && c.GetSHA() == tagSHA {
+				return commits, nil
+			}
+			commits = append(commits, release.Commit{
+				SHA:     c.GetSHA(),
+				Message: c.Commit.GetMessage(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return commits, nil
+}
+
+// --- release.ReleaseAPI ---
+
+func (a *ghAdapter) GetFileContent(ctx context.Context, owner, repo, path string) ([]byte, string, error) {
+	content, _, _, err := a.client.Repositories.GetContents(ctx, owner, repo, path, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	decoded, err := content.GetContent()
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(decoded), content.GetSHA(), nil
+}
+
+func (a *ghAdapter) GetDefaultBranch(ctx context.Context, owner, repo string) (string, error) {
+	r, _, err := a.client.Repositories.Get(ctx, owner, repo)
+	if err != nil {
+		return "", err
+	}
+	return r.GetDefaultBranch(), nil
+}
+
+func (a *ghAdapter) GetBranchSHA(ctx context.Context, owner, repo, branch string) (string, error) {
+	ref, _, err := a.client.Git.GetRef(ctx, owner, repo, "heads/"+branch)
+	if err != nil {
+		return "", err
+	}
+	return ref.Object.GetSHA(), nil
+}
+
+func (a *ghAdapter) CreateBranch(ctx context.Context, owner, repo, branch, sha string) error {
+	_, _, err := a.client.Git.CreateRef(ctx, owner, repo, &github.Reference{
+		Ref:    github.Ptr("refs/heads/" + branch),
+		Object: &github.GitObject{SHA: github.Ptr(sha)},
+	})
+	return err
+}
+
+func (a *ghAdapter) UpdateFile(ctx context.Context, owner, repo, path, message string, content []byte, sha, branch string) error {
+	_, _, err := a.client.Repositories.UpdateFile(ctx, owner, repo, path, &github.RepositoryContentFileOptions{
+		Message: github.Ptr(message),
+		Content: content,
+		SHA:     github.Ptr(sha),
+		Branch:  github.Ptr(branch),
+	})
+	return err
+}
+
+func (a *ghAdapter) CreatePR(ctx context.Context, owner, repo, title, body, head, base string) (int, error) {
+	pr, _, err := a.client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{
+		Title: github.Ptr(title),
+		Body:  github.Ptr(body),
+		Head:  github.Ptr(head),
+		Base:  github.Ptr(base),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return pr.GetNumber(), nil
 }
 
 // --- PR files ---

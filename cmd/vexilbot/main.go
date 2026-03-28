@@ -13,6 +13,7 @@ import (
 	"github.com/vexil-lang/vexilbot/internal/ghclient"
 	"github.com/vexil-lang/vexilbot/internal/labeler"
 	"github.com/vexil-lang/vexilbot/internal/policy"
+	"github.com/vexil-lang/vexilbot/internal/release"
 	"github.com/vexil-lang/vexilbot/internal/repoconfig"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/triage"
@@ -154,6 +155,11 @@ func main() {
 				return
 			}
 
+			if cmd.Name == "release" {
+				handleRelease(ctx, adapter, repoCfg, ev.Owner, ev.Repo, ev.IssueNumber, cmd.Args)
+				return
+			}
+
 			if err := triage.Execute(ctx, adapter, cmd, ev.Owner, ev.Repo, ev.IssueNumber, ev.CommentID); err != nil {
 				slog.Error("execute command", "cmd", cmd.Name, "user", ev.CommentUser, "error", err)
 			}
@@ -198,6 +204,24 @@ func main() {
 	if err := http.ListenAndServe(cfg.Server.Listen, mux); err != nil {
 		slog.Error("server error", "error", err)
 		os.Exit(1)
+	}
+}
+
+func handleRelease(ctx context.Context, adapter *ghAdapter, repoCfg *repoconfig.Config, owner, repo string, issueNumber int, args []string) {
+	subCmd := "status"
+	if len(args) > 0 {
+		subCmd = args[0]
+	}
+
+	var err error
+	switch subCmd {
+	case "status":
+		err = release.RunStatus(ctx, adapter, owner, repo, issueNumber, repoCfg.Release)
+	default:
+		err = release.RunRelease(ctx, adapter, owner, repo, subCmd, issueNumber, repoCfg.Release)
+	}
+	if err != nil {
+		slog.Error("release command", "sub", subCmd, "error", err)
 	}
 }
 
