@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
@@ -146,7 +148,8 @@ func main() {
 			return
 		}
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
 			wev := &webhookevent.WebhookEvent{
 				Ts:     uint64(time.Now().UnixNano()),
@@ -157,7 +160,9 @@ func main() {
 			}
 			bw := vexil.NewBitWriter()
 			if wev.Pack(bw) == nil {
-				_ = eventStore.Append(bw.Finish())
+				if err := eventStore.Append(bw.Finish()); err != nil {
+						slog.Error("event store append", "error", err)
+					}
 			}
 
 			repoCfg, err := configCache.Get(ctx, ev.Owner, ev.Repo)
@@ -201,7 +206,8 @@ func main() {
 			return
 		}
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
 			wev := &webhookevent.WebhookEvent{
 				Ts:     uint64(time.Now().UnixNano()),
@@ -212,7 +218,9 @@ func main() {
 			}
 			bw := vexil.NewBitWriter()
 			if wev.Pack(bw) == nil {
-				_ = eventStore.Append(bw.Finish())
+				if err := eventStore.Append(bw.Finish()); err != nil {
+						slog.Error("event store append", "error", err)
+					}
 			}
 
 			cmd, ok := triage.ParseCommand(ev.CommentBody, cfg.Server.BotName)
@@ -254,7 +262,8 @@ func main() {
 			return
 		}
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
 			wev := &webhookevent.WebhookEvent{
 				Ts:     uint64(time.Now().UnixNano()),
@@ -265,7 +274,9 @@ func main() {
 			}
 			bw := vexil.NewBitWriter()
 			if wev.Pack(bw) == nil {
-				_ = eventStore.Append(bw.Finish())
+				if err := eventStore.Append(bw.Finish()); err != nil {
+						slog.Error("event store append", "error", err)
+					}
 			}
 
 			repoCfg, err := configCache.Get(ctx, ev.Owner, ev.Repo)
@@ -290,7 +301,8 @@ func main() {
 
 	dispatcher.OnPush(func(ev webhook.PushEvent) {
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 			store.set(ev.Owner, ev.Repo, ev.InstallationID)
 			wev := &webhookevent.WebhookEvent{
 				Ts:     uint64(time.Now().UnixNano()),
@@ -301,7 +313,9 @@ func main() {
 			}
 			bw := vexil.NewBitWriter()
 			if wev.Pack(bw) == nil {
-				_ = eventStore.Append(bw.Finish())
+				if err := eventStore.Append(bw.Finish()); err != nil {
+						slog.Error("event store append", "error", err)
+					}
 			}
 			slog.InfoContext(ctx, "push event recorded", "owner", ev.Owner, "repo", ev.Repo)
 		}()
@@ -333,8 +347,20 @@ func main() {
 		}()
 	}
 
+	srv := &http.Server{Addr: cfg.Server.Listen, Handler: mux}
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		slog.Info("shutting down...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+	}()
+
 	slog.Info("vexilbot starting", "listen", cfg.Server.Listen)
-	if err := http.ListenAndServe(cfg.Server.Listen, mux); err != nil {
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("server error", "error", err)
 		os.Exit(1)
 	}

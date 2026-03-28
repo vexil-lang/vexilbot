@@ -52,6 +52,10 @@ func ParseVersion(s string) (Version, error) {
 		return Version{}, fmt.Errorf("invalid patch version: %w", err)
 	}
 
+	if major < 0 || minor < 0 || patch < 0 {
+		return Version{}, fmt.Errorf("version components must be non-negative: %q", s)
+	}
+
 	return Version{Major: major, Minor: minor, Patch: patch}, nil
 }
 

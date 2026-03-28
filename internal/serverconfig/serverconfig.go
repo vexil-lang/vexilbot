@@ -62,6 +62,9 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
+	if c.Server.Listen == "" {
+		return fmt.Errorf("server.listen is required")
+	}
 	if c.Server.WebhookSecret == "" {
 		return fmt.Errorf("server.webhook_secret is required")
 	}
@@ -70,6 +73,9 @@ func (c *Config) validate() error {
 	}
 	if c.GitHub.PrivateKeyPath == "" {
 		return fmt.Errorf("github.private_key_path is required")
+	}
+	if _, err := os.Stat(c.GitHub.PrivateKeyPath); err != nil {
+		return fmt.Errorf("github.private_key_path: %w", err)
 	}
 	if c.Server.BotName == "" {
 		return fmt.Errorf("server.bot_name is required")

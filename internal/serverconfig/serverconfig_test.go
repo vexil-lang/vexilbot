@@ -9,6 +9,7 @@ import (
 )
 
 func TestLoad_ValidConfig(t *testing.T) {
+	keyPath := writeTempKeyFile(t)
 	content := `
 [server]
 listen = "127.0.0.1:8080"
@@ -17,7 +18,7 @@ bot_name = "vexil-bot"
 
 [github]
 app_id = 12345
-private_key_path = "/etc/vexilbot/app.pem"
+private_key_path = ` + `"` + filepath.ToSlash(keyPath) + `"` + `
 
 [credentials]
 cargo_registry_token = "crt_abc123"
@@ -39,8 +40,8 @@ anthropic_api_key = "sk-ant-test"
 	if cfg.GitHub.AppID != 12345 {
 		t.Errorf("app_id = %d, want %d", cfg.GitHub.AppID, 12345)
 	}
-	if cfg.GitHub.PrivateKeyPath != "/etc/vexilbot/app.pem" {
-		t.Errorf("private_key_path = %q, want %q", cfg.GitHub.PrivateKeyPath, "/etc/vexilbot/app.pem")
+	if cfg.GitHub.PrivateKeyPath != filepath.ToSlash(keyPath) {
+		t.Errorf("private_key_path = %q, want %q", cfg.GitHub.PrivateKeyPath, filepath.ToSlash(keyPath))
 	}
 	if cfg.Credentials.CargoRegistryToken != "crt_abc123" {
 		t.Errorf("cargo_registry_token = %q, want %q", cfg.Credentials.CargoRegistryToken, "crt_abc123")
@@ -73,6 +74,7 @@ func TestLoad_FileNotFound(t *testing.T) {
 }
 
 func TestDashboardPortDefault(t *testing.T) {
+	keyPath := writeTempKeyFile(t)
 	content := `
 [server]
 listen = "0.0.0.0:8080"
@@ -80,7 +82,7 @@ webhook_secret = "s"
 bot_name = "vexilbot"
 [github]
 app_id = 1
-private_key_path = "/tmp/key"
+private_key_path = ` + `"` + filepath.ToSlash(keyPath) + `"` + `
 `
 	path := writeTempFile(t, content)
 	cfg, err := serverconfig.Load(path)
@@ -93,6 +95,7 @@ private_key_path = "/tmp/key"
 }
 
 func TestDashboardPortConfigured(t *testing.T) {
+	keyPath := writeTempKeyFile(t)
 	content := `
 [server]
 listen = "0.0.0.0:8080"
@@ -101,7 +104,7 @@ bot_name = "vexilbot"
 dashboard_port = 9090
 [github]
 app_id = 1
-private_key_path = "/tmp/key"
+private_key_path = ` + `"` + filepath.ToSlash(keyPath) + `"` + `
 `
 	path := writeTempFile(t, content)
 	cfg, err := serverconfig.Load(path)
@@ -111,6 +114,16 @@ private_key_path = "/tmp/key"
 	if cfg.Server.DashboardPort != 9090 {
 		t.Errorf("want DashboardPort=9090, got %d", cfg.Server.DashboardPort)
 	}
+}
+
+func writeTempKeyFile(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "app.pem")
+	if err := os.WriteFile(keyPath, []byte("fake-key"), 0o644); err != nil {
+		t.Fatalf("write temp key file: %v", err)
+	}
+	return keyPath
 }
 
 func writeTempFile(t *testing.T, content string) string {

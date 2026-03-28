@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -236,7 +237,11 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 					continue
 				}
 				constraint := fmt.Sprintf("^%s", depVersion)
-				updated, _ = BumpCargoDependency(updated, depName, constraint)
+				if bumped, err := BumpCargoDependency(updated, depName, constraint); err != nil {
+					slog.Error("bump dependency constraint", "crate", item.name, "dep", depName, "error", err)
+				} else {
+					updated = bumped
+				}
 			}
 		}
 
@@ -271,9 +276,8 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 				depPath := depEntry.Path + "/Cargo.toml"
 				var depContent []byte
 				var depSHA string
-				if sha, ok := updatedSHAs[depPath]; ok {
+				if _, ok := updatedSHAs[depPath]; ok {
 					depContent, depSHA, err = getFileFromBranch(ctx, api, owner, repo, depPath, releaseBranch)
-					_ = sha
 				} else {
 					depContent, depSHA, err = api.GetFileContent(ctx, owner, repo, depPath)
 				}
