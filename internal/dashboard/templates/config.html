@@ -1,0 +1,35 @@
+<!-- internal/dashboard/templates/config.html -->
+{{define "config"}}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Config — vexilbot</title>
+{{template "base-css" .}}
+</head><body>
+{{template "nav" .}}
+<div class="content">
+<h2>Server Config</h2>
+<pre>{{.ServerTOML}}</pre>
+
+<h2 style="margin-top:24px">Repo Config</h2>
+<form hx-get="/config/repo" hx-target="#repo-content" hx-swap="innerHTML" style="margin-bottom:12px">
+  <select name="owner-repo" onchange="
+    var parts=this.value.split('/');
+    this.form.elements['owner'].value=parts[0];
+    this.form.elements['repo'].value=parts[1];
+    htmx.trigger(this.form,'submit')
+  ">
+    <option value="">Select a repo…</option>
+    {{range .KnownRepos}}
+    <option value="{{.}}" {{if eq . (printf "%s/%s" $.SelectedOwner $.SelectedRepo)}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <input type="hidden" name="owner" value="{{.SelectedOwner}}">
+  <input type="hidden" name="repo"  value="{{.SelectedRepo}}">
+</form>
+<div id="repo-content">
+  {{if .RepoError}}<p style="color:#f85149">{{.RepoError}}</p>
+  {{else if .RepoTOML}}<pre>{{.RepoTOML}}</pre>
+  {{end}}
+</div>
+</div>
+</body></html>
+{{end}}

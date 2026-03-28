@@ -161,6 +161,19 @@ func TestReleasesOK(t *testing.T) {
 	}
 }
 
+func TestConfigOK(t *testing.T) {
+	srv := newTestServer(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/config", nil)
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "[redacted]") {
+		t.Error("expected secrets to be redacted in config view")
+	}
+}
+
 func TestReleasesCreate(t *testing.T) {
 	srv := newTestServer(t)
 	form := "package=mylib&bump=patch&run_at=2026-04-01T10%3A00&auto_run=on&owner=o&repo=r"
