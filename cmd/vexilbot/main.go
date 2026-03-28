@@ -11,6 +11,7 @@ import (
 	"time"
 
 	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+	"github.com/vexil-lang/vexilbot/internal/dashboard"
 	"github.com/vexil-lang/vexilbot/internal/ghclient"
 	"github.com/vexil-lang/vexilbot/internal/labeler"
 	"github.com/vexil-lang/vexilbot/internal/logstore"
@@ -21,6 +22,7 @@ import (
 	"github.com/vexil-lang/vexilbot/internal/triage"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/logentry"
+	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/scheduledrelease"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/webhookevent"
 	"github.com/vexil-lang/vexilbot/internal/webhook"
 	"github.com/vexil-lang/vexilbot/internal/welcome"
@@ -45,6 +47,16 @@ func (s *installationStore) get(owner, repo string) (int64, bool) {
 	id, ok := s.entries[owner+"/"+repo]
 	s.mu.RUnlock()
 	return id, ok
+}
+
+func (s *installationStore) list() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]string, 0, len(s.entries))
+	for k := range s.entries {
+		out = append(out, k)
+	}
+	return out
 }
 
 func main() {
@@ -75,6 +87,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer eventStore.Close()
+	scheduledRelStore, err := vexstore.OpenAppendStore(cfg.Server.DataDir+"/scheduled_releases.vxb", scheduledrelease.SchemaHash)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open scheduled release store: %v\n", err)
+		os.Exit(1)
+	}
+	defer scheduledRelStore.Close()
 	logger := slog.New(logstore.NewHandler(logStore, slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
 
@@ -98,6 +116,28 @@ func main() {
 		}
 		return repoconfig.Parse(data)
 	}, 5*time.Minute)
+
+	runRelease := func(ctx context.Context, owner, repo, pkg string) (int, error) {
+		id, ok := store.get(owner, repo)
+		if !ok {
+			return 0, fmt.Errorf("no installation ID known for %s/%s", owner, repo)
+		}
+		adapter := &ghAdapter{client: app.InstallationClient(id)}
+		repoCfg, err := configCache.Get(ctx, owner, repo)
+		if err != nil {
+			return 0, fmt.Errorf("get repo config: %w", err)
+		}
+		return release.RunReleaseNow(ctx, adapter, owner, repo, pkg, repoCfg.Release)
+	}
+
+	fetchRepoConfig := func(ctx context.Context, owner, repo string) ([]byte, error) {
+		id, ok := store.get(owner, repo)
+		if !ok {
+			return nil, fmt.Errorf("no installation ID known for %s/%s", owner, repo)
+		}
+		client := app.InstallationClient(id)
+		return app.FetchRepoConfig(ctx, client, owner, repo)
+	}
 
 	dispatcher := webhook.NewDispatcher()
 
@@ -272,6 +312,26 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler)
 	mux.Handle("POST /webhook", handler)
+
+	if cfg.Server.DashboardPort != 0 {
+		dashSrv := dashboard.New(dashboard.Deps{
+			LogStore:        logStore,
+			EventStore:      eventStore,
+			ReleaseStore:    scheduledRelStore,
+			DataDir:         cfg.Server.DataDir,
+			ServerConfig:    cfg,
+			KnownRepos:      store.list,
+			RunRelease:      runRelease,
+			FetchRepoConfig: fetchRepoConfig,
+		})
+		dashAddr := fmt.Sprintf("127.0.0.1:%d", cfg.Server.DashboardPort)
+		go func() {
+			slog.Info("dashboard starting", "listen", dashAddr)
+			if err := http.ListenAndServe(dashAddr, dashSrv); err != nil {
+				slog.Error("dashboard error", "error", err)
+			}
+		}()
+	}
 
 	slog.Info("vexilbot starting", "listen", cfg.Server.Listen)
 	if err := http.ListenAndServe(cfg.Server.Listen, mux); err != nil {
