@@ -200,6 +200,19 @@ func (a *ghAdapter) GetFileContent(ctx context.Context, owner, repo, path string
 	return []byte(decoded), content.GetSHA(), nil
 }
 
+func (a *ghAdapter) GetFileContentRef(ctx context.Context, owner, repo, path, ref string) ([]byte, string, error) {
+	opts := &github.RepositoryContentGetOptions{Ref: ref}
+	content, _, _, err := a.client.Repositories.GetContents(ctx, owner, repo, path, opts)
+	if err != nil {
+		return nil, "", err
+	}
+	decoded, err := content.GetContent()
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(decoded), content.GetSHA(), nil
+}
+
 func (a *ghAdapter) GetDefaultBranch(ctx context.Context, owner, repo string) (string, error) {
 	r, _, err := a.client.Repositories.Get(ctx, owner, repo)
 	if err != nil {

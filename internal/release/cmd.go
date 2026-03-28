@@ -14,6 +14,7 @@ import (
 type ReleaseAPI interface {
 	GitAPI
 	GetFileContent(ctx context.Context, owner, repo, path string) ([]byte, string, error)
+	GetFileContentRef(ctx context.Context, owner, repo, path, ref string) ([]byte, string, error)
 	GetDefaultBranch(ctx context.Context, owner, repo string) (string, error)
 	GetBranchSHA(ctx context.Context, owner, repo, branch string) (string, error)
 	CreateBranch(ctx context.Context, owner, repo, branch, sha string) error
@@ -79,17 +80,30 @@ func RunRelease(ctx context.Context, api ReleaseAPI, owner, repo, name string, i
 		fmt.Sprintf(":x: **%s** not found in `.vexilbot.toml` release config (checked `crates` and `packages`).", name))
 }
 
-// RunWorkspaceRelease creates one release PR per crate/package that has
-// unreleased commits, respecting dependency order within each ecosystem.
+// releaseItem tracks one crate or package being released.
+type releaseItem struct {
+	name       string
+	kind       string // "cargo" or "npm"
+	oldVersion string
+	newVersion Version
+	commits    []Commit
+	bump       BumpLevel
+}
+
+// RunWorkspaceRelease creates a single atomic release PR that bumps ALL
+// crates and packages with unreleased changes. One PR, one merge, one CI
+// run. Version bumps, dependency constraint updates, and changelogs are
+// all committed to the same branch.
 func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string, issueNumber int, cfg repoconfig.Release) error {
 	if len(cfg.Crates) == 0 && len(cfg.Packages) == 0 {
 		return api.CreateComment(ctx, owner, repo, issueNumber,
 			"No crates or packages configured under `[release]` in `.vexilbot.toml`.")
 	}
 
-	var lines []string
+	// --- Detect all changes ---
+	var items []releaseItem
+	crateVersions := make(map[string]Version) // name → new version (for dep constraint updates)
 
-	// --- Crates in dependency order ---
 	if len(cfg.Crates) > 0 {
 		results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
 		if err != nil {
@@ -101,22 +115,28 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 		}
 		for _, name := range order {
 			crate := cfg.Crates[name]
-			// Skip crates that are not publishable or not tracked
 			if isPublishDisabled(crate.Publish) || !crate.Track {
 				continue
 			}
-			if len(results[name].Commits) == 0 {
+			result := results[name]
+			if len(result.Commits) == 0 {
 				continue
 			}
-			prNum, err := createCratePR(ctx, api, owner, repo, name, crate, cfg)
+			newVersion, err := computeNewVersion(result)
 			if err != nil {
-				return fmt.Errorf("release crate %s: %w", name, err)
+				return fmt.Errorf("compute version for %s: %w", name, err)
 			}
-			lines = append(lines, fmt.Sprintf("- #%d **%s** (cargo)", prNum, name))
+			crateVersions[name] = newVersion
+			items = append(items, releaseItem{
+				name: name, kind: "cargo",
+				oldVersion: result.CurrentVersion,
+				newVersion: newVersion,
+				commits:    result.Commits,
+				bump:       result.SuggestedBump,
+			})
 		}
 	}
 
-	// --- Packages in dependency order ---
 	if len(cfg.Packages) > 0 {
 		results, err := DetectPackageChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Packages)
 		if err != nil {
@@ -127,23 +147,223 @@ func RunWorkspaceRelease(ctx context.Context, api ReleaseAPI, owner, repo string
 			return fmt.Errorf("resolve package dependency order: %w", err)
 		}
 		for _, name := range order {
-			if len(results[name].Commits) == 0 {
+			result := results[name]
+			if len(result.Commits) == 0 {
 				continue
 			}
-			prNum, err := createNpmPR(ctx, api, owner, repo, name, cfg.Packages[name], cfg)
+			newVersion, err := computeNewVersion(result)
 			if err != nil {
-				return fmt.Errorf("release package %s: %w", name, err)
+				return fmt.Errorf("compute version for %s: %w", name, err)
 			}
-			lines = append(lines, fmt.Sprintf("- #%d **%s** (npm)", prNum, name))
+			items = append(items, releaseItem{
+				name: name, kind: "npm",
+				oldVersion: result.CurrentVersion,
+				newVersion: newVersion,
+				commits:    result.Commits,
+				bump:       result.SuggestedBump,
+			})
 		}
 	}
 
-	if len(lines) == 0 {
+	if len(items) == 0 {
 		return api.CreateComment(ctx, owner, repo, issueNumber,
 			"No unreleased changes found — workspace is up to date.")
 	}
+
+	// --- Create a single release branch ---
+	defaultBranch, err := api.GetDefaultBranch(ctx, owner, repo)
+	if err != nil {
+		return fmt.Errorf("get default branch: %w", err)
+	}
+	branchSHA, err := api.GetBranchSHA(ctx, owner, repo, defaultBranch)
+	if err != nil {
+		return fmt.Errorf("get branch SHA: %w", err)
+	}
+
+	releaseBranch := fmt.Sprintf("release/workspace-%s", time.Now().UTC().Format("2006-01-02"))
+	if err := api.CreateBranch(ctx, owner, repo, releaseBranch, branchSHA); err != nil {
+		return fmt.Errorf("create branch %s: %w", releaseBranch, err)
+	}
+
+	// --- Commit all version bumps + dependency updates + changelogs ---
+	// Track files we've already updated on this branch (SHA changes after each commit)
+	updatedSHAs := make(map[string]string)
+
+	for _, item := range items {
+		var filePath string
+		var content []byte
+		var fileSHA string
+
+		if item.kind == "cargo" {
+			crate := cfg.Crates[item.name]
+			filePath = crate.Path + "/Cargo.toml"
+		} else {
+			pkg := cfg.Packages[item.name]
+			filePath = pkg.Path + "/package.json"
+		}
+
+		// Read the file (use branch version if we've already committed to it)
+		content, fileSHA, err = api.GetFileContent(ctx, owner, repo, filePath)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", filePath, err)
+		}
+		if sha, ok := updatedSHAs[filePath]; ok {
+			fileSHA = sha
+			// Re-read from branch to get the latest content
+			content, fileSHA, err = getFileFromBranch(ctx, api, owner, repo, filePath, releaseBranch)
+			if err != nil {
+				return fmt.Errorf("re-read %s from branch: %w", filePath, err)
+			}
+		}
+
+		// Bump version
+		var updated string
+		if item.kind == "cargo" {
+			updated, err = BumpCargoVersion(string(content), item.newVersion.String())
+		} else {
+			updated, err = BumpNpmVersion(string(content), item.newVersion.String())
+		}
+		if err != nil {
+			return fmt.Errorf("bump %s version: %w", item.name, err)
+		}
+
+		// For crates: also update dependency constraints in the same file
+		// (this crate might depend on another crate being bumped in the same release)
+		if item.kind == "cargo" {
+			for depName, depVersion := range crateVersions {
+				if depName == item.name {
+					continue
+				}
+				constraint := fmt.Sprintf("^%s", depVersion)
+				updated, _ = BumpCargoDependency(updated, depName, constraint)
+			}
+		}
+
+		commitMsg := fmt.Sprintf("chore(%s): bump to %s", item.name, item.newVersion)
+		if err := api.UpdateFile(ctx, owner, repo, filePath, commitMsg, []byte(updated), fileSHA, releaseBranch); err != nil {
+			return fmt.Errorf("commit %s version bump: %w", item.name, err)
+		}
+
+		// Track that this file was updated (for dependency constraint updates)
+		// We need the new SHA for subsequent updates to the same file
+		if _, newSHA, err := getFileFromBranch(ctx, api, owner, repo, filePath, releaseBranch); err == nil {
+			updatedSHAs[filePath] = newSHA
+		}
+
+		// Update dependency constraints in OTHER crates that depend on this one
+		if item.kind == "cargo" {
+			constraint := fmt.Sprintf("^%s", item.newVersion)
+			for depName, depEntry := range cfg.Crates {
+				if depName == item.name {
+					continue
+				}
+				isDep := false
+				for _, d := range depEntry.DependsOn {
+					if d == item.name {
+						isDep = true
+						break
+					}
+				}
+				if !isDep {
+					continue
+				}
+				depPath := depEntry.Path + "/Cargo.toml"
+				var depContent []byte
+				var depSHA string
+				if sha, ok := updatedSHAs[depPath]; ok {
+					depContent, depSHA, err = getFileFromBranch(ctx, api, owner, repo, depPath, releaseBranch)
+					_ = sha
+				} else {
+					depContent, depSHA, err = api.GetFileContent(ctx, owner, repo, depPath)
+				}
+				if err != nil {
+					continue
+				}
+				depUpdated, err := BumpCargoDependency(string(depContent), item.name, constraint)
+				if err != nil || depUpdated == string(depContent) {
+					continue
+				}
+				depMsg := fmt.Sprintf("chore(%s): update %s dep to %s", depName, item.name, constraint)
+				if err := api.UpdateFile(ctx, owner, repo, depPath, depMsg, []byte(depUpdated), depSHA, releaseBranch); err == nil {
+					if _, newSHA, err := getFileFromBranch(ctx, api, owner, repo, depPath, releaseBranch); err == nil {
+						updatedSHAs[depPath] = newSHA
+					}
+				}
+			}
+		}
+
+		// Commit changelog (best-effort)
+		var changelogDir string
+		if item.kind == "cargo" {
+			changelogDir = cfg.Crates[item.name].Path
+		} else {
+			changelogDir = cfg.Packages[item.name].Path
+		}
+		changelogPath := changelogDir + "/CHANGELOG.md"
+		section := GenerateChangelogSection(item.name, item.newVersion.String(), time.Now(), item.commits)
+		var changelogContent string
+		var changelogSHA string
+		if existing, sha, err := api.GetFileContent(ctx, owner, repo, changelogPath); err == nil {
+			changelogContent = PrependChangelog(string(existing), section)
+			changelogSHA = sha
+		} else {
+			changelogContent = "# Changelog\n\n" + section
+		}
+		clMsg := fmt.Sprintf("chore(%s): update changelog for %s", item.name, item.newVersion)
+		_ = api.UpdateFile(ctx, owner, repo, changelogPath, clMsg, []byte(changelogContent), changelogSHA, releaseBranch)
+	}
+
+	// --- Open one PR ---
+	prTitle, prBody := buildWorkspacePRBody(items)
+	prNumber, err := api.CreatePR(ctx, owner, repo, prTitle, prBody, releaseBranch, defaultBranch)
+	if err != nil {
+		return fmt.Errorf("create PR: %w", err)
+	}
+
+	var summary []string
+	for _, item := range items {
+		summary = append(summary, fmt.Sprintf("- **%s** v%s (%s)", item.name, item.newVersion, item.kind))
+	}
 	return api.CreateComment(ctx, owner, repo, issueNumber,
-		fmt.Sprintf("Created %d release PR(s):\n\n%s", len(lines), strings.Join(lines, "\n")))
+		fmt.Sprintf("Created release PR #%d:\n\n%s\n\nMerging it will publish all crates and packages.", prNumber, strings.Join(summary, "\n")))
+}
+
+// getFileFromBranch reads a file from a specific branch.
+func getFileFromBranch(ctx context.Context, api ReleaseAPI, owner, repo, filePath, branch string) ([]byte, string, error) {
+	return api.GetFileContentRef(ctx, owner, repo, filePath, branch)
+}
+
+func buildWorkspacePRBody(items []releaseItem) (string, string) {
+	var maxBump BumpLevel
+	for _, item := range items {
+		if item.bump > maxBump {
+			maxBump = item.bump
+		}
+	}
+
+	title := "release: workspace"
+	var sb strings.Builder
+	sb.WriteString("## Workspace Release\n\n")
+	sb.WriteString("| Crate/Package | Version | Bump | Commits |\n")
+	sb.WriteString("|---|---|---|---|\n")
+	for _, item := range items {
+		from := "initial"
+		if item.oldVersion != "" {
+			from = item.oldVersion
+		}
+		sb.WriteString(fmt.Sprintf("| %s | %s → %s | %s | %d |\n",
+			item.name, from, item.newVersion, item.bump, len(item.commits)))
+	}
+	sb.WriteString("\n")
+
+	for _, item := range items {
+		sb.WriteString(fmt.Sprintf("### %s v%s\n\n", item.name, item.newVersion))
+		sb.WriteString(GenerateChangelogSection(item.name, item.newVersion.String(), time.Now(), item.commits))
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("---\n_Merging this PR will trigger `cargo publish` and `npm publish` via GitHub Actions._")
+	return title, sb.String()
 }
 
 // --- internal helpers ---
