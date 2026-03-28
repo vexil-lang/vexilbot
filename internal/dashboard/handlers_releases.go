@@ -2,6 +2,7 @@
 package dashboard
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"net/http"
@@ -113,8 +114,9 @@ func (s *Server) handleReleasesRun(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	ctx := context.Background()
 	go func() {
-		_, runErr := s.deps.RunRelease(r.Context(), target.Owner, target.Repo, target.Package)
+		_, runErr := s.deps.RunRelease(ctx, target.Owner, target.Repo, target.Package)
 		status := scheduledrelease.ReleaseStatusDone
 		if runErr != nil {
 			status = scheduledrelease.ReleaseStatusCancelled
