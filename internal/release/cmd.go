@@ -20,88 +20,151 @@ type ReleaseAPI interface {
 	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
 }
 
-// RunStatus posts a release status comment listing unreleased changes per crate.
+// RunStatus posts a release status comment listing unreleased changes for all
+// configured crates and npm packages.
 func RunStatus(ctx context.Context, api ReleaseAPI, owner, repo string, issueNumber int, cfg repoconfig.Release) error {
-	if len(cfg.Crates) == 0 {
+	if len(cfg.Crates) == 0 && len(cfg.Packages) == 0 {
 		return api.CreateComment(ctx, owner, repo, issueNumber,
-			"No crates configured under `[release.crates]` in `.vexilbot.toml`.")
-	}
-	results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
-	if err != nil {
-		return fmt.Errorf("detect changes: %w", err)
-	}
-	return api.CreateComment(ctx, owner, repo, issueNumber, FormatStatus(results))
-}
-
-// RunRelease creates a release PR for the named crate with a semver bump
-// derived from conventional commits since the last tag.
-func RunRelease(ctx context.Context, api ReleaseAPI, owner, repo, crateName string, issueNumber int, cfg repoconfig.Release) error {
-	crate, ok := cfg.Crates[crateName]
-	if !ok {
-		return api.CreateComment(ctx, owner, repo, issueNumber,
-			fmt.Sprintf(":x: Crate **%s** not found in `.vexilbot.toml` release config.", crateName))
+			"No crates or packages configured under `[release]` in `.vexilbot.toml`.")
 	}
 
-	results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
-	if err != nil {
-		return fmt.Errorf("detect changes: %w", err)
-	}
+	combined := make(map[string]ChangeResult)
 
-	result := results[crateName]
-	if len(result.Commits) == 0 {
-		return api.CreateComment(ctx, owner, repo, issueNumber,
-			fmt.Sprintf("No unreleased changes for **%s** — nothing to release.", crateName))
-	}
-
-	var currentVersion Version
-	if result.CurrentVersion != "" {
-		currentVersion, err = ParseVersion(result.CurrentVersion)
+	if len(cfg.Crates) > 0 {
+		results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
 		if err != nil {
-			return fmt.Errorf("parse current version %q: %w", result.CurrentVersion, err)
+			return fmt.Errorf("detect crate changes: %w", err)
+		}
+		for k, v := range results {
+			combined[k] = v
 		}
 	}
-	newVersion := currentVersion.Bump(result.SuggestedBump)
 
-	cargoPath := crate.Path + "/Cargo.toml"
-	content, fileSHA, err := api.GetFileContent(ctx, owner, repo, cargoPath)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", cargoPath, err)
+	if len(cfg.Packages) > 0 {
+		results, err := DetectPackageChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Packages)
+		if err != nil {
+			return fmt.Errorf("detect package changes: %w", err)
+		}
+		for k, v := range results {
+			combined[k] = v
+		}
 	}
 
+	return api.CreateComment(ctx, owner, repo, issueNumber, FormatStatus(combined))
+}
+
+// RunRelease creates a release PR for the named crate or npm package.
+// It checks crates first, then packages.
+func RunRelease(ctx context.Context, api ReleaseAPI, owner, repo, name string, issueNumber int, cfg repoconfig.Release) error {
+	if crate, ok := cfg.Crates[name]; ok {
+		return runCargoRelease(ctx, api, owner, repo, name, issueNumber, crate, cfg)
+	}
+	if pkg, ok := cfg.Packages[name]; ok {
+		return runNpmRelease(ctx, api, owner, repo, name, issueNumber, pkg, cfg)
+	}
+	return api.CreateComment(ctx, owner, repo, issueNumber,
+		fmt.Sprintf(":x: **%s** not found in `.vexilbot.toml` release config (checked `crates` and `packages`).", name))
+}
+
+func runCargoRelease(ctx context.Context, api ReleaseAPI, owner, repo, name string, issueNumber int, crate repoconfig.CrateEntry, cfg repoconfig.Release) error {
+	results, err := DetectChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Crates)
+	if err != nil {
+		return fmt.Errorf("detect changes: %w", err)
+	}
+	result := results[name]
+	if len(result.Commits) == 0 {
+		return api.CreateComment(ctx, owner, repo, issueNumber,
+			fmt.Sprintf("No unreleased changes for **%s** — nothing to release.", name))
+	}
+
+	newVersion, err := computeNewVersion(result)
+	if err != nil {
+		return err
+	}
+
+	filePath := crate.Path + "/Cargo.toml"
+	content, fileSHA, err := api.GetFileContent(ctx, owner, repo, filePath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", filePath, err)
+	}
 	updated, err := BumpCargoVersion(string(content), newVersion.String())
 	if err != nil {
-		return fmt.Errorf("bump version in %s: %w", cargoPath, err)
+		return fmt.Errorf("bump version: %w", err)
 	}
 
+	return openReleasePR(ctx, api, owner, repo, name, issueNumber, filePath, updated, fileSHA, result, newVersion)
+}
+
+func runNpmRelease(ctx context.Context, api ReleaseAPI, owner, repo, name string, issueNumber int, pkg repoconfig.PackageEntry, cfg repoconfig.Release) error {
+	results, err := DetectPackageChanges(ctx, api, owner, repo, cfg.TagFormat, cfg.Packages)
+	if err != nil {
+		return fmt.Errorf("detect changes: %w", err)
+	}
+	result := results[name]
+	if len(result.Commits) == 0 {
+		return api.CreateComment(ctx, owner, repo, issueNumber,
+			fmt.Sprintf("No unreleased changes for **%s** — nothing to release.", name))
+	}
+
+	newVersion, err := computeNewVersion(result)
+	if err != nil {
+		return err
+	}
+
+	filePath := pkg.Path + "/package.json"
+	content, fileSHA, err := api.GetFileContent(ctx, owner, repo, filePath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", filePath, err)
+	}
+	updated, err := BumpNpmVersion(string(content), newVersion.String())
+	if err != nil {
+		return fmt.Errorf("bump version: %w", err)
+	}
+
+	return openReleasePR(ctx, api, owner, repo, name, issueNumber, filePath, updated, fileSHA, result, newVersion)
+}
+
+func computeNewVersion(result ChangeResult) (Version, error) {
+	var current Version
+	if result.CurrentVersion != "" {
+		var err error
+		current, err = ParseVersion(result.CurrentVersion)
+		if err != nil {
+			return Version{}, fmt.Errorf("parse current version %q: %w", result.CurrentVersion, err)
+		}
+	}
+	return current.Bump(result.SuggestedBump), nil
+}
+
+func openReleasePR(ctx context.Context, api ReleaseAPI, owner, repo, name string, issueNumber int, filePath, updated, fileSHA string, result ChangeResult, newVersion Version) error {
 	defaultBranch, err := api.GetDefaultBranch(ctx, owner, repo)
 	if err != nil {
 		return fmt.Errorf("get default branch: %w", err)
 	}
-
 	branchSHA, err := api.GetBranchSHA(ctx, owner, repo, defaultBranch)
 	if err != nil {
 		return fmt.Errorf("get branch SHA: %w", err)
 	}
 
-	releaseBranch := BranchName(crateName, newVersion.String())
+	releaseBranch := BranchName(name, newVersion.String())
 	if err := api.CreateBranch(ctx, owner, repo, releaseBranch, branchSHA); err != nil {
 		return fmt.Errorf("create branch %s: %w", releaseBranch, err)
 	}
 
-	commitMsg := fmt.Sprintf("chore(%s): bump version to %s", crateName, newVersion)
-	if err := api.UpdateFile(ctx, owner, repo, cargoPath, commitMsg, []byte(updated), fileSHA, releaseBranch); err != nil {
+	commitMsg := fmt.Sprintf("chore(%s): bump version to %s", name, newVersion)
+	if err := api.UpdateFile(ctx, owner, repo, filePath, commitMsg, []byte(updated), fileSHA, releaseBranch); err != nil {
 		return fmt.Errorf("commit version bump: %w", err)
 	}
 
-	prTitle := fmt.Sprintf("release: %s v%s", crateName, newVersion)
-	prBody := buildPRBody(crateName, result.CurrentVersion, newVersion.String(), result)
+	prTitle := fmt.Sprintf("release: %s v%s", name, newVersion)
+	prBody := buildPRBody(name, result.CurrentVersion, newVersion.String(), result)
 	prNumber, err := api.CreatePR(ctx, owner, repo, prTitle, prBody, releaseBranch, defaultBranch)
 	if err != nil {
 		return fmt.Errorf("create PR: %w", err)
 	}
 
 	return api.CreateComment(ctx, owner, repo, issueNumber,
-		fmt.Sprintf("Created release PR #%d for **%s** v%s (%s bump).", prNumber, crateName, newVersion, result.SuggestedBump))
+		fmt.Sprintf("Created release PR #%d for **%s** v%s (%s bump).", prNumber, name, newVersion, result.SuggestedBump))
 }
 
 func buildPRBody(crate, fromVersion, toVersion string, result ChangeResult) string {

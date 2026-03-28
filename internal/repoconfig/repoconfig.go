@@ -36,11 +36,19 @@ type Policy struct {
 }
 
 type Release struct {
-	ChangelogTool string                `toml:"changelog_tool"`
-	TagFormat     string                `toml:"tag_format"`
-	AutoRelease   bool                  `toml:"auto_release"`
-	RequireCI     bool                  `toml:"require_ci"`
-	Crates        map[string]CrateEntry `toml:"crates"`
+	ChangelogTool string                 `toml:"changelog_tool"`
+	TagFormat     string                 `toml:"tag_format"`
+	AutoRelease   bool                   `toml:"auto_release"`
+	RequireCI     bool                   `toml:"require_ci"`
+	Crates        map[string]CrateEntry  `toml:"crates"`
+	Packages      map[string]PackageEntry `toml:"packages"`
+}
+
+type PackageEntry struct {
+	Path             string        `toml:"path"`
+	Publish          interface{}   `toml:"publish"` // "npmjs" or false
+	SuggestThreshold int           `toml:"suggest_threshold"`
+	DependsOn        []string      `toml:"depends_on"`
 }
 
 type CrateEntry struct {

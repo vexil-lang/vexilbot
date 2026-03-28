@@ -34,6 +34,35 @@ func DetectChanges(
 	tagFormat string,
 	crates map[string]repoconfig.CrateEntry,
 ) (map[string]ChangeResult, error) {
+	paths := make(map[string]string, len(crates))
+	for name, c := range crates {
+		paths[name] = c.Path
+	}
+	return detectByPaths(ctx, api, owner, repo, tagFormat, paths)
+}
+
+// DetectPackageChanges checks each configured npm package for unreleased commits.
+func DetectPackageChanges(
+	ctx context.Context,
+	api GitAPI,
+	owner, repo string,
+	tagFormat string,
+	packages map[string]repoconfig.PackageEntry,
+) (map[string]ChangeResult, error) {
+	paths := make(map[string]string, len(packages))
+	for name, p := range packages {
+		paths[name] = p.Path
+	}
+	return detectByPaths(ctx, api, owner, repo, tagFormat, paths)
+}
+
+func detectByPaths(
+	ctx context.Context,
+	api GitAPI,
+	owner, repo string,
+	tagFormat string,
+	namePaths map[string]string,
+) (map[string]ChangeResult, error) {
 	tags, err := api.ListTags(ctx, owner, repo)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
@@ -41,10 +70,10 @@ func DetectChanges(
 
 	results := make(map[string]ChangeResult)
 
-	for name, crate := range crates {
+	for name, path := range namePaths {
 		latestTag, latestVersion := findLatestTag(tags, name, tagFormat)
 
-		commits, err := api.CommitsSinceTag(ctx, owner, repo, latestTag, crate.Path)
+		commits, err := api.CommitsSinceTag(ctx, owner, repo, latestTag, path)
 		if err != nil {
 			return nil, fmt.Errorf("commits for %s: %w", name, err)
 		}
