@@ -1,0 +1,7 @@
+namespace installation
+
+message InstallationEvent {
+    owner @0 : string
+    repo  @1 : string
+    iid   @2 : u64
+}
