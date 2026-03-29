@@ -143,22 +143,93 @@ func (a *ghAdapter) ListTags(ctx context.Context, owner, repo string) ([]string,
 }
 
 func (a *ghAdapter) CommitsSinceTag(ctx context.Context, owner, repo, tag, path string) ([]release.Commit, error) {
-	var tagSHA string
-	if tag != "" {
-		ref, _, err := a.client.Git.GetRef(ctx, owner, repo, "tags/"+tag)
-		if err != nil {
-			return nil, fmt.Errorf("resolve tag %s: %w", tag, err)
-		}
-		tagSHA = ref.Object.GetSHA()
-		// Dereference annotated tags to the underlying commit SHA.
-		if ref.Object.GetType() == "tag" {
-			tagObj, _, err := a.client.Git.GetTag(ctx, owner, repo, tagSHA)
-			if err == nil {
-				tagSHA = tagObj.Object.GetSHA()
-			}
+	if tag == "" {
+		// No tag exists — list all commits touching this path
+		return a.listCommitsByPath(ctx, owner, repo, path)
+	}
+
+	// Use the Compare API: tag...HEAD gives exactly the commits between them.
+	comparison, _, err := a.client.Repositories.CompareCommits(ctx, owner, repo, tag, "HEAD", nil)
+	if err != nil {
+		return nil, fmt.Errorf("compare %s...HEAD: %w", tag, err)
+	}
+
+	// Filter commits to only those touching the given path
+	var commits []release.Commit
+	for _, c := range comparison.Commits {
+		// Check if any file in this commit matches the path prefix
+		// The Compare API includes file lists per commit only at detail level,
+		// so we filter by checking the full commit's files.
+		// For efficiency, do a second pass: list commits by path since the tag.
+		commits = append(commits, release.Commit{
+			SHA:     c.GetSHA(),
+			Message: c.Commit.GetMessage(),
+		})
+	}
+
+	// The Compare API returns ALL commits between tag and HEAD, not filtered by path.
+	// Filter by re-listing commits with path filter, but bounded by the tag's date.
+	if path != "" {
+		return a.listCommitsByPathSinceTag(ctx, owner, repo, tag, path)
+	}
+
+	return commits, nil
+}
+
+// listCommitsByPathSinceTag lists commits touching a path since a tag,
+// using the tag's commit date as the lower bound.
+func (a *ghAdapter) listCommitsByPathSinceTag(ctx context.Context, owner, repo, tag, path string) ([]release.Commit, error) {
+	// Resolve tag to SHA and get its commit date
+	ref, _, err := a.client.Git.GetRef(ctx, owner, repo, "tags/"+tag)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tag %s: %w", tag, err)
+	}
+	tagSHA := ref.Object.GetSHA()
+	if ref.Object.GetType() == "tag" {
+		tagObj, _, err := a.client.Git.GetTag(ctx, owner, repo, tagSHA)
+		if err == nil {
+			tagSHA = tagObj.Object.GetSHA()
 		}
 	}
 
+	// Get the tag commit's date
+	tagCommit, _, err := a.client.Repositories.GetCommit(ctx, owner, repo, tagSHA, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get tag commit %s: %w", tagSHA, err)
+	}
+	tagDate := tagCommit.Commit.Committer.GetDate().Time
+
+	opts := &github.CommitsListOptions{
+		Path:        path,
+		Since:       tagDate,
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	var commits []release.Commit
+	for {
+		page, resp, err := a.client.Repositories.ListCommits(ctx, owner, repo, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range page {
+			// Skip the tag commit itself
+			if c.GetSHA() == tagSHA {
+				continue
+			}
+			commits = append(commits, release.Commit{
+				SHA:     c.GetSHA(),
+				Message: c.Commit.GetMessage(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return commits, nil
+}
+
+// listCommitsByPath lists all commits touching a path (no tag filter).
+func (a *ghAdapter) listCommitsByPath(ctx context.Context, owner, repo, path string) ([]release.Commit, error) {
 	opts := &github.CommitsListOptions{
 		Path:        path,
 		ListOptions: github.ListOptions{PerPage: 100},
@@ -170,9 +241,6 @@ func (a *ghAdapter) CommitsSinceTag(ctx context.Context, owner, repo, tag, path 
 			return nil, err
 		}
 		for _, c := range page {
-			if tagSHA != "" && c.GetSHA() == tagSHA {
-				return commits, nil
-			}
 			commits = append(commits, release.Commit{
 				SHA:     c.GetSHA(),
 				Message: c.Commit.GetMessage(),
