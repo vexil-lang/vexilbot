@@ -5,7 +5,6 @@
 {{template "base-css" .}}
 </head><body>
 {{template "nav" .}}
-<div class="content">
 <h2>Logs</h2>
 <form method="get" action="/logs" style="margin-bottom:16px">
   <div class="form-row">
@@ -22,7 +21,7 @@
   </div>
 </form>
 {{template "logs-rows" .Rows}}
-</div>
+{{template "nav-end" .}}
 </body></html>
 {{end}}
 

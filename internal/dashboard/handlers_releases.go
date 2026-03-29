@@ -25,7 +25,7 @@ type releaseRow struct {
 }
 
 type releasesPageData struct {
-	Tab  string
+	basePage
 	Rows []releaseRow
 }
 
@@ -35,7 +35,7 @@ func (s *Server) handleReleases(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "releases", releasesPageData{Tab: "releases", Rows: rows})
+	s.render(w, "releases", releasesPageData{basePage: s.base(r, "scheduled-releases"), Rows: rows})
 }
 
 func (s *Server) handleReleasesCreate(w http.ResponseWriter, r *http.Request) {

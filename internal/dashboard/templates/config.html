@@ -5,7 +5,6 @@
 {{template "base-css" .}}
 </head><body>
 {{template "nav" .}}
-<div class="content">
 <h2>Server Config</h2>
 <pre>{{.ServerTOML}}</pre>
 
@@ -30,6 +29,6 @@
   {{else if .RepoTOML}}<pre>{{.RepoTOML}}</pre>
   {{end}}
 </div>
-</div>
+{{template "nav-end" .}}
 </body></html>
 {{end}}

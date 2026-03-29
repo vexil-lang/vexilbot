@@ -19,7 +19,7 @@ type logRow struct {
 }
 
 type logsPageData struct {
-	Tab         string
+	basePage
 	Rows        []logRow
 	FilterLevel string
 	FilterOwner string
@@ -33,7 +33,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "logs", logsPageData{
-		Tab:         "logs",
+		basePage:    s.base(r, "logs"),
 		Rows:        rows,
 		FilterLevel: r.URL.Query().Get("level"),
 		FilterOwner: r.URL.Query().Get("owner"),

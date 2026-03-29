@@ -22,7 +22,7 @@ type storageRow struct {
 }
 
 type storagePageData struct {
-	Tab  string
+	basePage
 	Rows []storageRow
 }
 
@@ -36,7 +36,7 @@ func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
 	for _, path := range matches {
 		rows = append(rows, inspectVxb(path))
 	}
-	s.render(w, "storage", storagePageData{Tab: "storage", Rows: rows})
+	s.render(w, "storage", storagePageData{basePage: s.base(r, "storage"), Rows: rows})
 }
 
 func inspectVxb(path string) storageRow {

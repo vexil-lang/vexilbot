@@ -5,7 +5,6 @@
 {{template "base-css" .}}
 </head><body>
 {{template "nav" .}}
-<div class="content">
 <h2>Storage</h2>
 <table>
   <thead><tr><th>File</th><th>Size</th><th>Records</th><th>Schema (8 chars)</th><th>Oldest</th><th>Newest</th></tr></thead>
@@ -25,6 +24,6 @@
   {{end}}
   </tbody>
 </table>
-</div>
+{{template "nav-end" .}}
 </body></html>
 {{end}}

@@ -5,7 +5,6 @@
 {{template "base-css" .}}
 </head><body>
 {{template "nav" .}}
-<div class="content">
 <h2>Events</h2>
 <div style="margin-bottom:24px">
   <div class="stat-card">
@@ -29,6 +28,6 @@
   {{with index .Hourly 0}}<span>{{.Label}}</span>{{end}}
   {{with index .Hourly 23}}<span>{{.Label}}</span>{{end}}
 </div>
-</div>
+{{template "nav-end" .}}
 </body></html>
 {{end}}

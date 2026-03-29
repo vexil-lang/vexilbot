@@ -10,9 +10,8 @@ import (
 )
 
 type configPageData struct {
-	Tab           string
+	basePage
 	ServerTOML    string
-	KnownRepos    []string
 	SelectedOwner string
 	SelectedRepo  string
 	RepoTOML      string
@@ -21,9 +20,8 @@ type configPageData struct {
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "config", configPageData{
-		Tab:        "config",
+		basePage:   s.base(r, "config"),
 		ServerTOML: redactedServerTOML(s.deps.ServerConfig),
-		KnownRepos: s.deps.KnownRepos(),
 	})
 }
 
@@ -36,9 +34,8 @@ func (s *Server) handleConfigRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := s.deps.FetchRepoConfig(r.Context(), owner, repo)
 	d := configPageData{
-		Tab:           "config",
+		basePage:      s.base(r, "config"),
 		ServerTOML:    redactedServerTOML(s.deps.ServerConfig),
-		KnownRepos:    s.deps.KnownRepos(),
 		SelectedOwner: owner,
 		SelectedRepo:  repo,
 	}

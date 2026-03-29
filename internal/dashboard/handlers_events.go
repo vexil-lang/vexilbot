@@ -21,7 +21,7 @@ type hourBucket struct {
 }
 
 type eventsPageData struct {
-	Tab        string
+	basePage
 	TotalToday int
 	ByKind     []eventKindCount
 	Hourly     []hourBucket
@@ -84,7 +84,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, "events", eventsPageData{
-		Tab:        "events",
+		basePage:   s.base(r, "events"),
 		TotalToday: totalToday,
 		ByKind:     byKind,
 		Hourly:     hourly,
