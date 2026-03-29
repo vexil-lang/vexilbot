@@ -273,7 +273,11 @@ func main() {
 			}
 
 			if cmd.Name == "release" {
-				handleRelease(ctx, adapter, repoCfg, ev.Owner, ev.Repo, ev.IssueNumber, ev.IsPR, cmd.Args)
+				// Release needs much longer than the 30 s comment timeout:
+				// it merges, bumps, creates branches, and opens PRs.
+				releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer releaseCancel()
+				handleRelease(releaseCtx, adapter, repoCfg, ev.Owner, ev.Repo, ev.IssueNumber, ev.IsPR, cmd.Args)
 				return
 			}
 
