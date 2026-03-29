@@ -2,15 +2,18 @@
 {{define "base-css"}}
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace; font-size: 14px; }
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace; font-size: 14px; display: flex; flex-direction: column; min-height: 100vh; }
 a { color: #58a6ff; text-decoration: none; }
-.top-bar { background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 48px; }
-.top-bar .brand { font-weight: 700; color: #58a6ff; font-size: 15px; letter-spacing: .04em; }
-.tabs { display: flex; gap: 2px; }
-.tabs a { padding: 6px 14px; border-radius: 4px; color: #8b949e; font-size: 13px; }
-.tabs a.active { background: #1f6feb; color: #fff; font-weight: 600; }
-.tabs a:hover:not(.active) { background: #21262d; color: #e6edf3; }
-.content { padding: 24px; max-width: 1200px; }
+.layout { display: flex; flex: 1; min-height: 0; }
+.sidebar { width: 200px; min-width: 200px; background: #161b22; border-right: 1px solid #30363d; padding: 16px 0; display: flex; flex-direction: column; }
+.sidebar .brand { font-weight: 700; color: #58a6ff; font-size: 15px; letter-spacing: .04em; padding: 0 16px 16px; border-bottom: 1px solid #30363d; margin-bottom: 12px; }
+.sidebar select { background: #21262d; border: 1px solid #30363d; color: #e6edf3; padding: 5px 8px; border-radius: 4px; font-size: 12px; width: calc(100% - 32px); margin: 0 16px 16px; }
+.sidebar .section-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; padding: 0 16px 6px; }
+.sidebar a { display: block; padding: 6px 16px; color: #8b949e; font-size: 13px; border-radius: 0; }
+.sidebar a.active { background: #1f6feb22; color: #e6edf3; border-left: 2px solid #1f6feb; }
+.sidebar a:hover:not(.active) { background: #21262d; color: #e6edf3; }
+.sidebar .spacer { height: 12px; }
+.content { flex: 1; padding: 24px; overflow-y: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #21262d; font-size: 13px; }
 th { color: #8b949e; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
@@ -21,6 +24,9 @@ th { color: #8b949e; font-weight: 600; font-size: 11px; text-transform: uppercas
 .badge-error { background: #3a1a1a; color: #f85149; }
 .badge-auto   { background: #1a3a1a; color: #3fb950; }
 .badge-manual { background: #3a2a00; color: #d29922; }
+.badge-open   { background: #1a3a1a; color: #3fb950; }
+.badge-closed { background: #3a1a1a; color: #f85149; }
+.badge-merged { background: #2d1a5c; color: #a371f7; }
 .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px 20px; display: inline-block; min-width: 140px; margin: 0 8px 8px 0; vertical-align: top; }
 .stat-card .label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
 .stat-card .value { font-size: 24px; font-weight: 700; }
@@ -34,21 +40,62 @@ button:hover { background: #30363d; }
 button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 button.primary:hover { background: #388bfd; }
 button.danger { background: #6e2828; border-color: #6e2828; color: #f85149; }
+button.success { background: #1a4a1a; border-color: #2ea043; color: #3fb950; }
 .form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #e6edf3; }
+.split { display: flex; gap: 16px; }
+.split .pane-list { width: 340px; min-width: 340px; }
+.split .pane-detail { flex: 1; }
+.pane-list .issue-row, .pane-list .pull-row { padding: 10px 12px; border-bottom: 1px solid #21262d; cursor: pointer; border-radius: 4px; }
+.pane-list .issue-row:hover, .pane-list .pull-row:hover { background: #161b22; }
+.pane-list .issue-row.selected, .pane-list .pull-row.selected { background: #1f6feb22; border-left: 2px solid #1f6feb; }
+.detail-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 16px; }
+.detail-section { margin-bottom: 16px; }
+.detail-section-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.label-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 2px; }
+.label-badge .remove { cursor: pointer; color: #8b949e; font-size: 10px; }
+.label-badge .remove:hover { color: #f85149; }
+.two-pane { display: flex; gap: 24px; }
+.two-pane .base-pane { flex: 1; }
+.two-pane .override-pane { flex: 1; }
+.override-field { margin-bottom: 12px; }
+.override-field label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px; }
+.override-field input[type=text], .override-field textarea { width: 100%; }
+.override-field textarea { background: #21262d; border: 1px solid #30363d; color: #e6edf3; padding: 6px 10px; border-radius: 4px; font-size: 12px; font-family: monospace; min-height: 80px; resize: vertical; }
+.subtitle { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
 </style>
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 {{end}}
 
 {{define "nav"}}
-<div class="top-bar">
-  <span class="brand">VEXILBOT</span>
-  <nav class="tabs">
-    <a href="/logs"     {{if eq .Tab "logs"}}class="active"{{end}}>Logs</a>
-    <a href="/events"   {{if eq .Tab "events"}}class="active"{{end}}>Events</a>
-    <a href="/releases" {{if eq .Tab "releases"}}class="active"{{end}}>Releases</a>
-    <a href="/config"   {{if eq .Tab "config"}}class="active"{{end}}>Config</a>
-    <a href="/storage"  {{if eq .Tab "storage"}}class="active"{{end}}>Storage</a>
-  </nav>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand">VEXILBOT</div>
+  {{if .KnownRepos}}
+  <select onchange="window.location.search='?repo='+encodeURIComponent(this.value)" id="repo-select">
+    <option value="">— select repo —</option>
+    {{range .KnownRepos}}<option value="{{.}}" {{if eq . $.Repo}}selected{{end}}>{{.}}</option>{{end}}
+  </select>
+  {{end}}
+  {{if .Repo}}
+  <div class="section-label">Repo</div>
+  <a href="/issues?repo={{.Repo}}"   {{if eq .Tab "issues"}}class="active"{{end}}>Issues</a>
+  <a href="/pulls?repo={{.Repo}}"    {{if eq .Tab "pulls"}}class="active"{{end}}>Pull Requests</a>
+  <a href="/releases/status?repo={{.Repo}}" {{if eq .Tab "releases"}}class="active"{{end}}>Releases</a>
+  <a href="/config/repo?repo={{.Repo}}" {{if eq .Tab "repo-config"}}class="active"{{end}}>Repo Config</a>
+  <div class="spacer"></div>
+  {{end}}
+  <div class="section-label">Global</div>
+  <a href="/logs"          {{if eq .Tab "logs"}}class="active"{{end}}>Logs</a>
+  <a href="/events"        {{if eq .Tab "events"}}class="active"{{end}}>Events</a>
+  <a href="/config/server" {{if eq .Tab "server-config"}}class="active"{{end}}>Server Config</a>
+  <a href="/storage"       {{if eq .Tab "storage"}}class="active"{{end}}>Storage</a>
+  <a href="/releases"      {{if eq .Tab "scheduled-releases"}}class="active"{{end}}>Scheduled Releases</a>
+</aside>
+<main class="content">
+{{end}}
+
+{{define "nav-end"}}
+</main>
 </div>
 {{end}}
