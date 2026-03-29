@@ -1,0 +1,50 @@
+{{define "issues.html"}}
+{{template "base-css" .}}
+{{template "nav" .}}
+<h2>Issues{{if .Repo}} — {{.Repo}}{{end}}</h2>
+{{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
+{{if .Repo}}
+<div class="form-row" style="margin-bottom:16px;">
+  <form method="GET" action="/issues" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input type="hidden" name="repo" value="{{.Repo}}">
+    <input type="text" name="label" placeholder="Label" value="{{.FilterLabel}}" style="width:120px;">
+    <input type="text" name="assignee" placeholder="Assignee" value="{{.FilterAssignee}}" style="width:120px;">
+    <select name="priority">
+      <option value="">Any priority</option>
+      <option value="p0" {{if eq .FilterPriority "p0"}}selected{{end}}>p0</option>
+      <option value="p1" {{if eq .FilterPriority "p1"}}selected{{end}}>p1</option>
+      <option value="p2" {{if eq .FilterPriority "p2"}}selected{{end}}>p2</option>
+      <option value="p3" {{if eq .FilterPriority "p3"}}selected{{end}}>p3</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+<div class="split">
+  <div class="pane-list" id="issue-list">
+    {{range .Issues}}
+    <div class="issue-row"
+         hx-get="/issues/{{.Number}}?repo={{$.Repo}}"
+         hx-target="#issue-detail"
+         hx-swap="innerHTML"
+         onclick="document.querySelectorAll('.issue-row').forEach(function(el){el.classList.remove('selected')});this.classList.add('selected')">
+      <div><span style="color:#58a6ff;">#{{.Number}}</span> {{.Title}}</div>
+      <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+        {{range .Labels}}<span class="label-badge" style="background:#{{.Color}}22;color:#{{.Color}};">{{.Name}}</span>{{end}}
+        <span style="color:#8b949e;font-size:11px;margin-left:auto;">{{.Age}}</span>
+      </div>
+    </div>
+    {{else}}
+    <p class="subtitle" style="padding:16px;">No open issues.</p>
+    {{end}}
+  </div>
+  <div class="pane-detail">
+    <div id="issue-detail" class="detail-box">
+      <p class="subtitle">Click an issue to view details and actions.</p>
+    </div>
+  </div>
+</div>
+{{else}}
+<p class="subtitle">Select a repo in the sidebar to view its issues.</p>
+{{end}}
+{{template "nav-end" .}}
+{{end}}

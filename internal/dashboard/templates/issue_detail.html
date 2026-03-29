@@ -1,0 +1,82 @@
+{{define "issue_detail.html"}}
+{{if .ErrorMsg}}
+<p style="color:#f85149;">{{.ErrorMsg}}</p>
+{{else}}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+  <div>
+    <span style="color:#58a6ff;font-size:16px;font-weight:700;">#{{.Number}}</span>
+    <span style="font-size:15px;font-weight:600;margin-left:6px;">{{.Title}}</span>
+  </div>
+  <span class="badge badge-{{.State}}">{{.State}}</span>
+</div>
+<div style="color:#8b949e;font-size:12px;margin-bottom:16px;">
+  Opened by <strong style="color:#e6edf3;">@{{.Author}}</strong> {{.Age}} ago
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Labels</div>
+  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+    {{range .Labels}}
+    <span class="label-badge" style="background:#{{.Color}}22;color:#{{.Color}};">
+      {{.Name}}
+      <span class="remove"
+            hx-post="/issues/{{$.Number}}/unlabel?repo={{$.Repo}}"
+            hx-vals='{"label":"{{.Name}}"}'
+            hx-target="#issue-detail"
+            hx-swap="innerHTML">×</span>
+    </span>
+    {{else}}<span style="color:#8b949e;font-size:12px;">none</span>{{end}}
+  </div>
+  <form hx-post="/issues/{{.Number}}/label?repo={{.Repo}}" hx-target="#issue-detail" hx-swap="innerHTML" style="display:flex;gap:6px;margin-top:6px;">
+    <input type="text" name="label" placeholder="Add label" style="width:140px;font-size:12px;padding:3px 8px;">
+    <button type="submit" style="font-size:12px;">Add</button>
+  </form>
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Assignees</div>
+  <div style="margin-bottom:6px;">
+    {{range .Assignees}}<span style="color:#e6edf3;font-size:12px;margin-right:8px;">@{{.}}</span>{{else}}<span style="color:#8b949e;font-size:12px;">none</span>{{end}}
+  </div>
+  <form hx-post="/issues/{{.Number}}/assign?repo={{.Repo}}" hx-target="#issue-detail" hx-swap="innerHTML" style="display:flex;gap:6px;">
+    <input type="text" name="assignee" placeholder="GitHub username" style="width:160px;font-size:12px;padding:3px 8px;">
+    <button type="submit" style="font-size:12px;">Assign</button>
+  </form>
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Priority</div>
+  <form hx-post="/issues/{{.Number}}/prioritize?repo={{.Repo}}" hx-target="#issue-detail" hx-swap="innerHTML" style="display:flex;gap:6px;">
+    <select name="priority" style="font-size:12px;padding:3px 8px;">
+      <option value="p0">p0 — critical</option>
+      <option value="p1">p1 — high</option>
+      <option value="p2">p2 — medium</option>
+      <option value="p3">p3 — low</option>
+    </select>
+    <button type="submit" style="font-size:12px;">Set</button>
+  </form>
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Actions</div>
+  {{if eq .State "open"}}
+  <button class="danger"
+          hx-post="/issues/{{.Number}}/close?repo={{.Repo}}"
+          hx-target="#issue-detail"
+          hx-swap="innerHTML">Close issue</button>
+  {{else}}
+  <button class="success"
+          hx-post="/issues/{{.Number}}/reopen?repo={{.Repo}}"
+          hx-target="#issue-detail"
+          hx-swap="innerHTML">Reopen issue</button>
+  {{end}}
+</div>
+
+{{if .Body}}
+<div class="detail-section">
+  <div class="detail-section-label">Description</div>
+  <div style="color:#e6edf3;font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:300px;overflow-y:auto;">{{.Body}}</div>
+</div>
+{{end}}
+{{end}}
+{{end}}

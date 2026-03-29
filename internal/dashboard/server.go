@@ -83,6 +83,14 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("POST /config/repo/overrides", s.handleConfigRepoOverridesSave)
 	s.mux.HandleFunc("DELETE /config/repo/overrides", s.handleConfigRepoOverridesDelete)
 	s.mux.HandleFunc("GET /storage", s.handleStorage)
+	s.mux.HandleFunc("GET /issues", s.handleIssues)
+	s.mux.HandleFunc("GET /issues/{number}", s.handleIssueDetail)
+	s.mux.HandleFunc("POST /issues/{number}/label", s.handleIssueLabel)
+	s.mux.HandleFunc("POST /issues/{number}/unlabel", s.handleIssueUnlabel)
+	s.mux.HandleFunc("POST /issues/{number}/assign", s.handleIssueAssign)
+	s.mux.HandleFunc("POST /issues/{number}/prioritize", s.handleIssuePrioritize)
+	s.mux.HandleFunc("POST /issues/{number}/close", s.handleIssueClose)
+	s.mux.HandleFunc("POST /issues/{number}/reopen", s.handleIssueReopen)
 	return s
 }
 
