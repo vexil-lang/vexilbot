@@ -41,6 +41,10 @@ func RunStatus(ctx context.Context, api ReleaseAPI, owner, repo string, issueNum
 			return fmt.Errorf("detect crate changes: %w", err)
 		}
 		for k, v := range results {
+			// Skip crates with publish = false
+			if crate, ok := cfg.Crates[k]; ok && isPublishDisabled(crate.Publish) {
+				continue
+			}
 			combined[k] = v
 		}
 	}
