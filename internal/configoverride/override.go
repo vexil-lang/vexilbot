@@ -2,12 +2,26 @@ package configoverride
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 	"github.com/vexil-lang/vexilbot/internal/repoconfig"
 )
+
+func init() {
+	repoconfig.MakeFilesystemOverrideMerger = func(dataDir string) repoconfig.OverrideMerger {
+		return func(owner, repo string, cfg *repoconfig.Config) (*repoconfig.Config, error) {
+			ovPath := Path(dataDir, owner, repo)
+			merged, err := Merge(cfg, ovPath)
+			if err != nil {
+				return nil, fmt.Errorf("filesystem override for %s/%s: %w", owner, repo, err)
+			}
+			return merged, nil
+		}
+	}
+}
 
 // Path returns the canonical override file path for a repo.
 func Path(dataDir, owner, repo string) string {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vexil-lang/vexilbot/internal/configoverride"
 	"github.com/vexil-lang/vexilbot/internal/repoconfig"
 )
 
@@ -78,5 +79,28 @@ func TestCache_SeparateRepos(t *testing.T) {
 
 	if fetched.Load() != 2 {
 		t.Errorf("fetched %d times, want 2 (separate repos)", fetched.Load())
+	}
+}
+
+func TestCache_AppliesOverride(t *testing.T) {
+	dir := t.TempDir()
+	ovPath := configoverride.Path(dir, "owner", "repo")
+	if err := configoverride.Save(ovPath, []byte("[welcome]\npr_message = \"from-override\"\n")); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	fetch := func(ctx context.Context, owner, repo string) (*repoconfig.Config, error) {
+		calls++
+		cfg := &repoconfig.Config{}
+		cfg.Welcome.PRMessage = "from-base"
+		return cfg, nil
+	}
+	cache := repoconfig.NewCacheWithOverrides(fetch, dir, time.Minute)
+	got, err := cache.Get(context.Background(), "owner", "repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Welcome.PRMessage != "from-override" {
+		t.Fatalf("expected from-override, got %q", got.Welcome.PRMessage)
 	}
 }

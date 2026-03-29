@@ -108,7 +108,7 @@ func main() {
 
 	store := &installationStore{entries: make(map[string]int64)}
 
-	configCache := repoconfig.NewCache(func(ctx context.Context, owner, repo string) (*repoconfig.Config, error) {
+	configCache := repoconfig.NewCacheWithOverrides(func(ctx context.Context, owner, repo string) (*repoconfig.Config, error) {
 		id, ok := store.get(owner, repo)
 		if !ok {
 			return nil, fmt.Errorf("no installation ID known for %s/%s", owner, repo)
@@ -119,7 +119,7 @@ func main() {
 			return nil, err
 		}
 		return repoconfig.Parse(data)
-	}, 5*time.Minute)
+	}, cfg.Server.DataDir, 5*time.Minute)
 
 	runRelease := func(ctx context.Context, owner, repo, pkg string) (int, error) {
 		id, ok := store.get(owner, repo)
