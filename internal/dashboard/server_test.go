@@ -219,3 +219,15 @@ func TestStorageOK(t *testing.T) {
 		t.Error("expected record count of 1 in storage response")
 	}
 }
+
+func TestBasePage_RepoFromQuery(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest("GET", "/?repo=owner/repo", nil)
+	bp := srv.Base(req, "logs")
+	if bp.Repo != "owner/repo" {
+		t.Fatalf("got %q want owner/repo", bp.Repo)
+	}
+	if bp.Tab != "logs" {
+		t.Fatalf("got %q want logs", bp.Tab)
+	}
+}

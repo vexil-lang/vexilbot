@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
 )
@@ -28,6 +29,19 @@ type Deps struct {
 	RunRelease func(ctx context.Context, owner, repo, pkg string) (int, error)
 	// FetchRepoConfig fetches the raw .vexilbot.toml bytes for owner/repo from GitHub.
 	FetchRepoConfig func(ctx context.Context, owner, repo string) ([]byte, error)
+	// GetInstallationClient returns a GitHub client authenticated as the bot
+	// for the given owner/repo.
+	GetInstallationClient func(owner, repo string) (*github.Client, error)
+	// RunWorkspaceRelease triggers a workspace release for owner/repo.
+	// Returns the number of release PRs created.
+	RunWorkspaceRelease func(ctx context.Context, owner, repo string) (int, error)
+}
+
+// basePage is embedded in every page data struct.
+type basePage struct {
+	Tab        string
+	Repo       string
+	KnownRepos []string
 }
 
 // Server is the dashboard HTTP server.
@@ -73,5 +87,14 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// Base constructs a basePage from the request and the active tab name.
+func (s *Server) Base(r *http.Request, tab string) basePage {
+	return basePage{
+		Tab:        tab,
+		Repo:       r.URL.Query().Get("repo"),
+		KnownRepos: s.deps.KnownRepos(),
 	}
 }
