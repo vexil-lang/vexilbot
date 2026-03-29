@@ -176,32 +176,28 @@ func (a *ghAdapter) CommitsSinceTag(ctx context.Context, owner, repo, tag, path 
 	return commits, nil
 }
 
-// listCommitsByPathSinceTag lists commits touching a path since a tag,
-// using the tag's commit date as the lower bound.
+// listCommitsByPathSinceTag uses the Compare API to get the exact set of
+// commits between a tag and HEAD, then filters to only those touching the
+// given path prefix.
 func (a *ghAdapter) listCommitsByPathSinceTag(ctx context.Context, owner, repo, tag, path string) ([]release.Commit, error) {
-	// Resolve tag to SHA and get its commit date
-	ref, _, err := a.client.Git.GetRef(ctx, owner, repo, "tags/"+tag)
+	comparison, _, err := a.client.Repositories.CompareCommits(ctx, owner, repo, tag, "HEAD", nil)
 	if err != nil {
-		return nil, fmt.Errorf("resolve tag %s: %w", tag, err)
-	}
-	tagSHA := ref.Object.GetSHA()
-	if ref.Object.GetType() == "tag" {
-		tagObj, _, err := a.client.Git.GetTag(ctx, owner, repo, tagSHA)
-		if err == nil {
-			tagSHA = tagObj.Object.GetSHA()
-		}
+		return nil, fmt.Errorf("compare %s...HEAD: %w", tag, err)
 	}
 
-	// Get the tag commit's date
-	tagCommit, _, err := a.client.Repositories.GetCommit(ctx, owner, repo, tagSHA, nil)
-	if err != nil {
-		return nil, fmt.Errorf("get tag commit %s: %w", tagSHA, err)
+	// Build set of SHAs from the comparison (these are the actual commits between tag and HEAD)
+	compareSHAs := make(map[string]string) // SHA → message
+	for _, c := range comparison.Commits {
+		compareSHAs[c.GetSHA()] = c.Commit.GetMessage()
 	}
-	tagDate := tagCommit.Commit.Committer.GetDate().Time
 
+	if len(compareSHAs) == 0 {
+		return nil, nil
+	}
+
+	// Now list commits by path on the default branch to get only those touching our path
 	opts := &github.CommitsListOptions{
 		Path:        path,
-		Since:       tagDate,
 		ListOptions: github.ListOptions{PerPage: 100},
 	}
 	var commits []release.Commit
@@ -211,16 +207,16 @@ func (a *ghAdapter) listCommitsByPathSinceTag(ctx context.Context, owner, repo, 
 			return nil, err
 		}
 		for _, c := range page {
-			// Skip the tag commit itself
-			if c.GetSHA() == tagSHA {
-				continue
+			sha := c.GetSHA()
+			if msg, ok := compareSHAs[sha]; ok {
+				commits = append(commits, release.Commit{
+					SHA:     sha,
+					Message: msg,
+				})
 			}
-			commits = append(commits, release.Commit{
-				SHA:     c.GetSHA(),
-				Message: c.Commit.GetMessage(),
-			})
 		}
-		if resp.NextPage == 0 {
+		// Stop early if we've found all comparison commits or gone past them
+		if resp.NextPage == 0 || len(commits) >= len(compareSHAs) {
 			break
 		}
 		opts.Page = resp.NextPage
