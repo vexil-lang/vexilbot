@@ -1,9 +1,5 @@
-<!-- internal/dashboard/templates/repo_config.html -->
 {{define "repo_config.html"}}
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Repo Config — vexilbot</title>
 {{template "base-css" .}}
-</head><body>
 {{template "nav" .}}
 <h2>Repo Config{{if .Repo}} — {{.Repo}}{{end}}</h2>
 {{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
@@ -32,5 +28,4 @@
 <p class="subtitle">Select a repo in the sidebar to view and edit its config.</p>
 {{end}}
 {{template "nav-end" .}}
-</body></html>
 {{end}}

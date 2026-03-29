@@ -163,7 +163,7 @@ func TestReleasesOK(t *testing.T) {
 func TestConfigOK(t *testing.T) {
 	srv := newTestServer(t)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/config", nil)
+	req := httptest.NewRequest("GET", "/config/server", nil)
 	srv.ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
