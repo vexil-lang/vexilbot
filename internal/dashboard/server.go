@@ -90,8 +90,8 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 }
 
-// Base constructs a basePage from the request and the active tab name.
-func (s *Server) Base(r *http.Request, tab string) basePage {
+// base constructs a basePage from the request and the active tab name.
+func (s *Server) base(r *http.Request, tab string) basePage {
 	return basePage{
 		Tab:        tab,
 		Repo:       r.URL.Query().Get("repo"),

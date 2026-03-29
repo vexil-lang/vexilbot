@@ -1,4 +1,4 @@
-package dashboard_test
+package dashboard
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vexil-lang/vexilbot/internal/dashboard"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/logentry"
@@ -28,14 +27,14 @@ func openTestStore(t *testing.T, schemaHash [32]byte) *vexstore.AppendStore {
 	return s
 }
 
-func newTestServer(t *testing.T) *dashboard.Server {
+func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	cfg := &serverconfig.Config{}
 	cfg.Server.WebhookSecret = "secret"
 	cfg.GitHub.PrivateKeyPath = "/tmp/key"
 	cfg.Credentials.CargoRegistryToken = "token"
 	cfg.LLM.AnthropicAPIKey = "key"
-	return dashboard.New(dashboard.Deps{
+	return New(Deps{
 		LogStore:        openTestStore(t, logentry.SchemaHash),
 		EventStore:      openTestStore(t, webhookevent.SchemaHash),
 		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
@@ -76,7 +75,7 @@ func TestLogsFilterLevel(t *testing.T) {
 	writeLogRecord(t, store, logentry.LogEntry{Ts: 1000, Level: logentry.LogLevelInfo, Msg: "hello", Owner: "o", Repo: "r"})
 	writeLogRecord(t, store, logentry.LogEntry{Ts: 2000, Level: logentry.LogLevelError, Msg: "boom", Owner: "o", Repo: "r"})
 
-	srv := dashboard.New(dashboard.Deps{
+	srv := New(Deps{
 		LogStore:        store,
 		EventStore:      openTestStore(t, webhookevent.SchemaHash),
 		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
@@ -119,7 +118,7 @@ func TestEventsOK(t *testing.T) {
 		Ts: uint64(time.Now().UnixNano()), Kind: webhookevent.EventKindPush, Owner: "o", Repo: "r",
 	})
 
-	srv := dashboard.New(dashboard.Deps{
+	srv := New(Deps{
 		LogStore:        openTestStore(t, logentry.SchemaHash),
 		EventStore:      evStore,
 		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
@@ -196,7 +195,7 @@ func TestStorageOK(t *testing.T) {
 	writeLogRecord(t, store, logentry.LogEntry{Ts: 1000, Level: logentry.LogLevelInfo, Msg: "hi"})
 	store.Close()
 
-	srv := dashboard.New(dashboard.Deps{
+	srv := New(Deps{
 		LogStore:        openTestStore(t, logentry.SchemaHash),
 		EventStore:      openTestStore(t, webhookevent.SchemaHash),
 		ReleaseStore:    openTestStore(t, scheduledrelease.SchemaHash),
@@ -223,7 +222,7 @@ func TestStorageOK(t *testing.T) {
 func TestBasePage_RepoFromQuery(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest("GET", "/?repo=owner/repo", nil)
-	bp := srv.Base(req, "logs")
+	bp := srv.base(req, "logs")
 	if bp.Repo != "owner/repo" {
 		t.Fatalf("got %q want owner/repo", bp.Repo)
 	}
