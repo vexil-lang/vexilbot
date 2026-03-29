@@ -1,0 +1,55 @@
+{{define "release_status.html"}}
+{{template "base-css" .}}
+{{template "nav" .}}
+<h2>Releases{{if .Repo}} — {{.Repo}}{{end}}</h2>
+{{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
+{{if .Repo}}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+  <div class="detail-section-label">Unreleased changes</div>
+  <form method="POST" action="/releases/workspace?repo={{.Repo}}">
+    <button type="submit" class="primary" onclick="return confirm('Trigger workspace release for {{.Repo}}?')">Trigger workspace release</button>
+  </form>
+</div>
+{{if .StatusRows}}
+<table>
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>Current version</th>
+      <th>Unreleased commits</th>
+      <th>Suggested bump</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .StatusRows}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td style="font-family:monospace;">{{if .Version}}{{.Version}}{{else}}—{{end}}</td>
+      <td>{{.Commits}}</td>
+      <td>
+        {{if eq .Bump "none"}}<span style="color:#8b949e;">none</span>
+        {{else if eq .Bump "patch"}}<span style="color:#3fb950;">patch</span>
+        {{else if eq .Bump "minor"}}<span style="color:#d29922;">minor</span>
+        {{else}}<span style="color:#f85149;">major</span>{{end}}
+      </td>
+      <td>
+        {{if ne .Bump "none"}}
+        <form method="POST" action="/releases/single?repo={{$.Repo}}" style="display:inline;">
+          <input type="hidden" name="package" value="{{.Name}}">
+          <button type="submit" class="primary" style="font-size:11px;padding:3px 10px;">Release</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="subtitle">No packages configured or no unreleased changes.</p>
+{{end}}
+{{else}}
+<p class="subtitle">Select a repo in the sidebar to view release status.</p>
+{{end}}
+{{template "nav-end" .}}
+{{end}}
