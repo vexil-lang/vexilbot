@@ -20,7 +20,7 @@ type configPageData struct {
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "config", configPageData{
-		basePage:   s.base(r, "config"),
+		basePage:   s.base(r, "server-config"),
 		ServerTOML: redactedServerTOML(s.deps.ServerConfig),
 	})
 }
@@ -34,7 +34,7 @@ func (s *Server) handleConfigRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := s.deps.FetchRepoConfig(r.Context(), owner, repo)
 	d := configPageData{
-		basePage:      s.base(r, "config"),
+		basePage:      s.base(r, "server-config"),
 		ServerTOML:    redactedServerTOML(s.deps.ServerConfig),
 		SelectedOwner: owner,
 		SelectedRepo:  repo,
