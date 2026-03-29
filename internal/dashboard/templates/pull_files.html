@@ -1,0 +1,11 @@
+{{define "pull_files.html"}}
+<div class="detail-section-label">Changed files ({{len .Files}})</div>
+<div style="font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto;">
+  {{range .Files}}
+  <div style="padding:2px 0;color:{{if eq .Status "added"}}#3fb950{{else if eq .Status "removed"}}#f85149{{else}}#e6edf3{{end}};">
+    {{.Filename}}
+    <span style="color:#8b949e;font-size:11px;margin-left:8px;">{{.Status}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}

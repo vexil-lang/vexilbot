@@ -1,0 +1,43 @@
+{{define "pulls.html"}}
+{{template "base-css" .}}
+{{template "nav" .}}
+<h2>Pull Requests{{if .Repo}} — {{.Repo}}{{end}}</h2>
+{{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
+{{if .Repo}}
+<div class="split">
+  <div class="pane-list" id="pull-list">
+    {{range .Pulls}}
+    <div class="pull-row"
+         hx-get="/pulls/{{.Number}}?repo={{$.Repo}}"
+         hx-target="#pull-detail"
+         hx-swap="innerHTML"
+         onclick="document.querySelectorAll('.pull-row').forEach(function(el){el.classList.remove('selected')});this.classList.add('selected')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <span style="color:#58a6ff;">#{{.Number}}</span>
+          <span style="margin-left:4px;">{{.Title}}</span>
+        </div>
+        {{if eq .Mergeable "conflict"}}<span style="color:#d29922;font-size:10px;">conflict</span>{{end}}
+      </div>
+      <div style="margin-top:4px;color:#8b949e;font-size:11px;">
+        {{.HeadBranch}} · @{{.Author}} · {{.Age}}
+      </div>
+      <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+        {{range .Labels}}<span class="label-badge" style="background:#{{.Color}}22;color:#{{.Color}};">{{.Name}}</span>{{end}}
+      </div>
+    </div>
+    {{else}}
+    <p class="subtitle" style="padding:16px;">No open pull requests.</p>
+    {{end}}
+  </div>
+  <div class="pane-detail">
+    <div id="pull-detail" class="detail-box">
+      <p class="subtitle">Click a pull request to view details and actions.</p>
+    </div>
+  </div>
+</div>
+{{else}}
+<p class="subtitle">Select a repo in the sidebar to view its pull requests.</p>
+{{end}}
+{{template "nav-end" .}}
+{{end}}

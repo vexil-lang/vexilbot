@@ -91,6 +91,15 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("POST /issues/{number}/prioritize", s.handleIssuePrioritize)
 	s.mux.HandleFunc("POST /issues/{number}/close", s.handleIssueClose)
 	s.mux.HandleFunc("POST /issues/{number}/reopen", s.handleIssueReopen)
+	s.mux.HandleFunc("GET /pulls", s.handlePulls)
+	s.mux.HandleFunc("GET /pulls/{number}", s.handlePullDetail)
+	s.mux.HandleFunc("GET /pulls/{number}/files", s.handlePullFiles)
+	s.mux.HandleFunc("POST /pulls/{number}/label", s.handlePullLabel)
+	s.mux.HandleFunc("POST /pulls/{number}/unlabel", s.handlePullUnlabel)
+	s.mux.HandleFunc("POST /pulls/{number}/assign", s.handlePullAssign)
+	s.mux.HandleFunc("POST /pulls/{number}/merge", s.handlePullMerge)
+	s.mux.HandleFunc("POST /pulls/{number}/close", s.handlePullClose)
+	s.mux.HandleFunc("POST /pulls/{number}/reopen", s.handlePullReopen)
 	return s
 }
 

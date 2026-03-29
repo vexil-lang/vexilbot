@@ -1,0 +1,85 @@
+{{define "pull_detail.html"}}
+{{if .ErrorMsg}}
+<p style="color:#f85149;">{{.ErrorMsg}}</p>
+{{else}}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+  <div>
+    <span style="color:#58a6ff;font-size:16px;font-weight:700;">#{{.Number}}</span>
+    <span style="font-size:15px;font-weight:600;margin-left:6px;">{{.Title}}</span>
+  </div>
+  <span class="badge badge-{{.State}}">{{.State}}</span>
+</div>
+<div style="color:#8b949e;font-size:12px;margin-bottom:16px;">
+  @{{.Author}} · {{.HeadBranch}} → {{.BaseBranch}} · {{.Age}} ago
+  {{if eq .Mergeable "conflict"}}<span style="color:#d29922;margin-left:8px;">⚠ merge conflict</span>{{end}}
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Labels</div>
+  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+    {{range .Labels}}
+    <span class="label-badge" style="background:#{{.Color}}22;color:#{{.Color}};">
+      {{.Name}}
+      <span class="remove"
+            hx-post="/pulls/{{$.Number}}/unlabel?repo={{$.Repo}}"
+            hx-vals='{"label":"{{.Name}}"}'
+            hx-target="#pull-detail"
+            hx-swap="innerHTML">×</span>
+    </span>
+    {{else}}<span style="color:#8b949e;font-size:12px;">none</span>{{end}}
+  </div>
+  <form hx-post="/pulls/{{.Number}}/label?repo={{.Repo}}" hx-target="#pull-detail" hx-swap="innerHTML" style="display:flex;gap:6px;margin-top:6px;">
+    <input type="text" name="label" placeholder="Add label" style="width:140px;font-size:12px;padding:3px 8px;">
+    <button type="submit" style="font-size:12px;">Add</button>
+  </form>
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Assignees</div>
+  <div style="margin-bottom:6px;">
+    {{range .Assignees}}<span style="color:#e6edf3;font-size:12px;margin-right:8px;">@{{.}}</span>{{else}}<span style="color:#8b949e;font-size:12px;">none</span>{{end}}
+  </div>
+  <form hx-post="/pulls/{{.Number}}/assign?repo={{.Repo}}" hx-target="#pull-detail" hx-swap="innerHTML" style="display:flex;gap:6px;">
+    <input type="text" name="assignee" placeholder="GitHub username" style="width:160px;font-size:12px;padding:3px 8px;">
+    <button type="submit" style="font-size:12px;">Assign</button>
+  </form>
+</div>
+
+<div class="detail-section">
+  <div class="detail-section-label">Actions</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;">
+    {{if eq .State "open"}}
+    {{if eq .Mergeable "mergeable"}}
+    <button class="primary"
+            hx-post="/pulls/{{.Number}}/merge?repo={{.Repo}}"
+            hx-target="#pull-detail"
+            hx-swap="innerHTML"
+            hx-confirm="Merge this pull request?">Merge PR</button>
+    {{end}}
+    <button class="danger"
+            hx-post="/pulls/{{.Number}}/close?repo={{.Repo}}"
+            hx-target="#pull-detail"
+            hx-swap="innerHTML">Close PR</button>
+    {{else}}
+    <button class="success"
+            hx-post="/pulls/{{.Number}}/reopen?repo={{.Repo}}"
+            hx-target="#pull-detail"
+            hx-swap="innerHTML">Reopen PR</button>
+    {{end}}
+    <button
+      hx-get="/pulls/{{.Number}}/files?repo={{.Repo}}"
+      hx-target="#pull-files"
+      hx-swap="innerHTML">Show changed files</button>
+  </div>
+</div>
+
+<div class="detail-section" id="pull-files"></div>
+
+{{if .Body}}
+<div class="detail-section">
+  <div class="detail-section-label">Description</div>
+  <div style="color:#e6edf3;font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:300px;overflow-y:auto;">{{.Body}}</div>
+</div>
+{{end}}
+{{end}}
+{{end}}
