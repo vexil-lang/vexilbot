@@ -1,0 +1,31 @@
+{{define "server_config.html"}}
+{{template "base-css" .}}
+{{template "nav" .}}
+<h2>Server Config</h2>
+{{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
+{{if .SavedMsg}}<p style="color:#3fb950;margin-bottom:12px;">{{.SavedMsg}}</p>{{end}}
+<div style="max-width:600px;">
+  <div class="detail-section-label" style="margin-bottom:12px;">Read-only (requires restart to change)</div>
+  <table style="margin-bottom:24px;">
+    <tr><td style="color:#8b949e;width:200px;">Listen</td><td>{{.Listen}}</td></tr>
+    <tr><td style="color:#8b949e;">App ID</td><td>{{.AppID}}</td></tr>
+    <tr><td style="color:#8b949e;">Private key path</td><td>{{.PrivateKeyPath}}</td></tr>
+    <tr><td style="color:#8b949e;">Dashboard port</td><td>{{.DashboardPort}}</td></tr>
+    <tr><td style="color:#8b949e;">Data dir</td><td>{{.DataDir}}</td></tr>
+    <tr><td style="color:#8b949e;">Webhook secret</td><td>[redacted]</td></tr>
+    <tr><td style="color:#8b949e;">Cargo registry token</td><td>[redacted]</td></tr>
+    <tr><td style="color:#8b949e;">Anthropic API key</td><td>[redacted]</td></tr>
+  </table>
+  <div class="detail-section-label" style="margin-bottom:12px;">Hot-editable (takes effect immediately)</div>
+  <form method="POST" action="/config/server">
+    <div class="override-field">
+      <label>bot_name — the @mention name the bot responds to</label>
+      <input type="text" name="bot_name" value="{{.BotName}}" style="width:100%;">
+    </div>
+    <div class="form-row" style="margin-top:12px;">
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</div>
+{{template "nav-end" .}}
+{{end}}

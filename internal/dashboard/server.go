@@ -7,11 +7,18 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/google/go-github/v68/github"
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
 )
+
+// serverOverrides holds hot-editable server config fields (persisted across restarts).
+type serverOverrides struct {
+	mu      sync.RWMutex
+	botName string
+}
 
 //go:embed templates/*
 var templateFS embed.FS
@@ -46,9 +53,10 @@ type basePage struct {
 
 // Server is the dashboard HTTP server.
 type Server struct {
-	mux  *http.ServeMux
-	tmpl *template.Template
-	deps Deps
+	mux      *http.ServeMux
+	tmpl     *template.Template
+	deps     Deps
+	overrides serverOverrides
 }
 
 // New creates a dashboard Server with all routes registered.
@@ -59,6 +67,7 @@ func New(deps Deps) *Server {
 		}).ParseFS(templateFS, "templates/*.html"),
 	)
 	s := &Server{mux: http.NewServeMux(), tmpl: tmpl, deps: deps}
+	s.loadServerOverrides()
 	s.mux.HandleFunc("GET /", s.handleRoot)
 	s.mux.HandleFunc("GET /logs", s.handleLogs)
 	s.mux.HandleFunc("GET /logs-rows", s.handleLogsRows)
@@ -68,7 +77,8 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("POST /releases/{id}/cancel", s.handleReleasesCancel)
 	s.mux.HandleFunc("POST /releases/{id}/confirm", s.handleReleasesConfirm)
 	s.mux.HandleFunc("POST /releases/{id}/run", s.handleReleasesRun)
-	s.mux.HandleFunc("GET /config", s.handleConfig)
+	s.mux.HandleFunc("GET /config/server", s.handleConfigServer)
+	s.mux.HandleFunc("POST /config/server", s.handleConfigServerSave)
 	s.mux.HandleFunc("GET /config/repo", s.handleConfigRepo)
 	s.mux.HandleFunc("POST /config/repo/overrides", s.handleConfigRepoOverridesSave)
 	s.mux.HandleFunc("DELETE /config/repo/overrides", s.handleConfigRepoOverridesDelete)

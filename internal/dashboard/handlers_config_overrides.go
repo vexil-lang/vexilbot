@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/vexil-lang/vexilbot/internal/configoverride"
 )
 
@@ -83,4 +84,90 @@ func splitRepo(ownerRepo string) (owner, repo string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
+}
+
+// ---- Server config ----
+
+type serverConfigPageData struct {
+	basePage
+	Listen         string
+	AppID          int64
+	PrivateKeyPath string
+	DashboardPort  int
+	DataDir        string
+	BotName        string
+	SavedMsg       string
+	ErrorMsg       string
+}
+
+func (s *Server) handleConfigServer(w http.ResponseWriter, r *http.Request) {
+	bp := s.base(r, "server-config")
+	sc := s.deps.ServerConfig
+	s.overrides.mu.RLock()
+	botName := s.overrides.botName
+	s.overrides.mu.RUnlock()
+	if botName == "" && sc != nil {
+		botName = sc.Server.BotName
+	}
+	savedMsg := ""
+	if r.URL.Query().Get("saved") == "1" {
+		savedMsg = "Saved."
+	}
+	var listen, privateKeyPath string
+	var appID int64
+	var dashboardPort int
+	var dataDir string
+	if sc != nil {
+		listen = sc.Server.Listen
+		appID = sc.GitHub.AppID
+		privateKeyPath = sc.GitHub.PrivateKeyPath
+		dashboardPort = sc.Server.DashboardPort
+		dataDir = sc.Server.DataDir
+	}
+	s.render(w, "server_config.html", serverConfigPageData{
+		basePage:       bp,
+		Listen:         listen,
+		AppID:          appID,
+		PrivateKeyPath: privateKeyPath,
+		DashboardPort:  dashboardPort,
+		DataDir:        dataDir,
+		BotName:        botName,
+		SavedMsg:       savedMsg,
+	})
+}
+
+func (s *Server) handleConfigServerSave(w http.ResponseWriter, r *http.Request) {
+	botName := strings.TrimSpace(r.FormValue("bot_name"))
+	s.overrides.mu.Lock()
+	s.overrides.botName = botName
+	s.overrides.mu.Unlock()
+	ovPath := configoverride.ServerPath(s.deps.DataDir)
+	content := fmt.Sprintf("[server]\nbot_name = %q\n", botName)
+	if err := configoverride.Save(ovPath, []byte(content)); err != nil {
+		http.Error(w, "save: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/config/server?saved=1", http.StatusSeeOther)
+}
+
+func (s *Server) loadServerOverrides() {
+	if s.deps.DataDir == "" {
+		return
+	}
+	ovPath := configoverride.ServerPath(s.deps.DataDir)
+	data, err := configoverride.Load(ovPath)
+	if err != nil || data == nil {
+		return
+	}
+	var sc struct {
+		Server struct {
+			BotName string `toml:"bot_name"`
+		} `toml:"server"`
+	}
+	if _, err := toml.Decode(string(data), &sc); err != nil {
+		return
+	}
+	s.overrides.mu.Lock()
+	s.overrides.botName = sc.Server.BotName
+	s.overrides.mu.Unlock()
 }
