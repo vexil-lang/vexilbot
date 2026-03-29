@@ -27,6 +27,7 @@ import (
 	"github.com/vexil-lang/vexilbot/internal/serverconfig"
 	"github.com/vexil-lang/vexilbot/internal/triage"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
+	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/installation"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/logentry"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/scheduledrelease"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/webhookevent"
@@ -40,12 +41,26 @@ import (
 type installationStore struct {
 	mu      sync.RWMutex
 	entries map[string]int64
+	store   *vexstore.AppendStore // nil = in-memory only
 }
 
 func (s *installationStore) set(owner, repo string, id int64) {
 	s.mu.Lock()
 	s.entries[owner+"/"+repo] = id
 	s.mu.Unlock()
+	if s.store != nil {
+		ev := &installation.InstallationEvent{
+			Owner: owner,
+			Repo:  repo,
+			Iid:   uint64(id),
+		}
+		bw := vexil.NewBitWriter()
+		if ev.Pack(bw) == nil {
+			if err := s.store.Append(bw.Finish()); err != nil {
+				slog.Error("installation store append", "error", err)
+			}
+		}
+	}
 }
 
 func (s *installationStore) get(owner, repo string) (int64, bool) {
@@ -63,6 +78,25 @@ func (s *installationStore) list() []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func (s *installationStore) loadFromStore(store *vexstore.AppendStore) error {
+	records, err := store.ReadAll()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, rec := range records {
+		r := vexil.NewBitReader(rec)
+		var ev installation.InstallationEvent
+		if err := ev.Unpack(r); err != nil {
+			slog.Warn("installation store: skip bad record", "error", err)
+			continue
+		}
+		s.entries[ev.Owner+"/"+ev.Repo] = int64(ev.Iid)
+	}
+	return nil
 }
 
 func main() {
