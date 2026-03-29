@@ -49,7 +49,7 @@ func (m *InstallationEvent) Unpack(r *vexil.BitReader) error {
 		m.Iid = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = nil
+	m.Unknown = r.ReadRemaining()
 	return nil
 }
 
