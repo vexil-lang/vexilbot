@@ -11,11 +11,7 @@ import (
 
 type configPageData struct {
 	basePage
-	ServerTOML    string
-	SelectedOwner string
-	SelectedRepo  string
-	RepoTOML      string
-	RepoError     string
+	ServerTOML string
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -23,28 +19,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		basePage:   s.base(r, "server-config"),
 		ServerTOML: redactedServerTOML(s.deps.ServerConfig),
 	})
-}
-
-func (s *Server) handleConfigRepo(w http.ResponseWriter, r *http.Request) {
-	owner := r.URL.Query().Get("owner")
-	repo := r.URL.Query().Get("repo")
-	if owner == "" || repo == "" {
-		http.Error(w, "owner and repo are required", http.StatusBadRequest)
-		return
-	}
-	data, err := s.deps.FetchRepoConfig(r.Context(), owner, repo)
-	d := configPageData{
-		basePage:      s.base(r, "server-config"),
-		ServerTOML:    redactedServerTOML(s.deps.ServerConfig),
-		SelectedOwner: owner,
-		SelectedRepo:  repo,
-	}
-	if err != nil {
-		d.RepoError = err.Error()
-	} else {
-		d.RepoTOML = string(data)
-	}
-	s.render(w, "config", d)
 }
 
 // redactedServerTOML renders the server config as TOML-like text with secrets replaced by [redacted].

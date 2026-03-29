@@ -70,6 +70,8 @@ func New(deps Deps) *Server {
 	s.mux.HandleFunc("POST /releases/{id}/run", s.handleReleasesRun)
 	s.mux.HandleFunc("GET /config", s.handleConfig)
 	s.mux.HandleFunc("GET /config/repo", s.handleConfigRepo)
+	s.mux.HandleFunc("POST /config/repo/overrides", s.handleConfigRepoOverridesSave)
+	s.mux.HandleFunc("DELETE /config/repo/overrides", s.handleConfigRepoOverridesDelete)
 	s.mux.HandleFunc("GET /storage", s.handleStorage)
 	return s
 }

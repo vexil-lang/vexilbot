@@ -1,0 +1,36 @@
+<!-- internal/dashboard/templates/repo_config.html -->
+{{define "repo_config.html"}}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Repo Config — vexilbot</title>
+{{template "base-css" .}}
+</head><body>
+{{template "nav" .}}
+<h2>Repo Config{{if .Repo}} — {{.Repo}}{{end}}</h2>
+{{if .ErrorMsg}}<p style="color:#f85149;margin-bottom:12px;">{{.ErrorMsg}}</p>{{end}}
+{{if .SavedMsg}}<p style="color:#3fb950;margin-bottom:12px;">{{.SavedMsg}}</p>{{end}}
+{{if .BaseToml}}
+<div class="two-pane">
+  <div class="base-pane">
+    <div class="detail-section-label" style="margin-bottom:8px;">Base config (.vexilbot.toml from repo)</div>
+    <pre>{{.BaseToml}}</pre>
+  </div>
+  <div class="override-pane">
+    <div class="detail-section-label" style="margin-bottom:8px;">Local overrides (stored on server, merged over base)</div>
+    <form method="POST" action="/config/repo/overrides?repo={{.Repo}}">
+      <div class="override-field">
+        <label>Override TOML — paste only the sections you want to override</label>
+        <textarea name="override_toml" style="min-height:400px;width:100%;">{{.OverrideToml}}</textarea>
+      </div>
+      <div class="form-row">
+        <button type="submit" class="primary">Save overrides</button>
+        <button type="button" onclick="if(confirm('Delete all overrides for this repo?'))fetch('/config/repo/overrides?repo={{.Repo}}',{method:'DELETE'}).then(()=>location.reload())">Delete overrides</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{else}}
+<p class="subtitle">Select a repo in the sidebar to view and edit its config.</p>
+{{end}}
+{{template "nav-end" .}}
+</body></html>
+{{end}}
