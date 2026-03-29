@@ -47,8 +47,8 @@ func Delete(path string) error {
 
 // Merge applies the override file at path on top of base.
 // If the file does not exist, base is returned unchanged (as a copy).
-// Merge is section-level: if a section key is present in the override file,
-// the whole section replaces the base section.
+// Most sections are replaced wholesale when present; Welcome is merged
+// field-by-field so individual messages can be overridden independently.
 func Merge(base *repoconfig.Config, path string) (*repoconfig.Config, error) {
 	data, err := Load(path)
 	if err != nil {
