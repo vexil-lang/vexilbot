@@ -133,6 +133,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer scheduledRelStore.Close()
+	installationVxbStore, err := vexstore.OpenAppendStore(cfg.Server.DataDir+"/installations.vxb", installation.SchemaHash)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open installation store: %v\n", err)
+		os.Exit(1)
+	}
+	defer installationVxbStore.Close()
 	logger := slog.New(logstore.NewHandler(logStore, slog.NewJSONHandler(os.Stdout, nil)))
 	slog.SetDefault(logger)
 
@@ -142,7 +148,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := &installationStore{entries: make(map[string]int64)}
+	store := &installationStore{entries: make(map[string]int64), store: installationVxbStore}
+	if err := store.loadFromStore(installationVxbStore); err != nil {
+		slog.Warn("load installation store", "error", err)
+	}
 
 	configCache := repoconfig.NewCacheWithOverrides(func(ctx context.Context, owner, repo string) (*repoconfig.Config, error) {
 		id, ok := store.get(owner, repo)
