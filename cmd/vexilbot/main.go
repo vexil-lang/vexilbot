@@ -15,6 +15,7 @@ import (
 	"time"
 
 	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+	"github.com/google/go-github/v68/github"
 	_ "github.com/vexil-lang/vexilbot/internal/configoverride"
 	"github.com/vexil-lang/vexilbot/internal/dashboard"
 	"github.com/vexil-lang/vexilbot/internal/ghclient"
@@ -142,6 +143,30 @@ func main() {
 		}
 		client := app.InstallationClient(id)
 		return app.FetchRepoConfig(ctx, client, owner, repo)
+	}
+
+	getInstallationClient := func(owner, repo string) (*github.Client, error) {
+		id, ok := store.get(owner, repo)
+		if !ok {
+			return nil, fmt.Errorf("no installation ID known for %s/%s", owner, repo)
+		}
+		return app.InstallationClient(id), nil
+	}
+
+	runWorkspaceRelease := func(ctx context.Context, owner, repo string) (int, error) {
+		id, ok := store.get(owner, repo)
+		if !ok {
+			return 0, fmt.Errorf("no installation ID known for %s/%s", owner, repo)
+		}
+		adapter := &ghAdapter{client: app.InstallationClient(id)}
+		repoCfg, err := configCache.Get(ctx, owner, repo)
+		if err != nil {
+			return 0, fmt.Errorf("get repo config: %w", err)
+		}
+		if err := release.RunWorkspaceRelease(ctx, adapter, owner, repo, 0, repoCfg.Release); err != nil {
+			return 0, err
+		}
+		return 1, nil
 	}
 
 	dispatcher := webhook.NewDispatcher()
@@ -360,14 +385,16 @@ func main() {
 
 	if cfg.Server.DashboardPort != 0 {
 		dashSrv := dashboard.New(dashboard.Deps{
-			LogStore:        logStore,
-			EventStore:      eventStore,
-			ReleaseStore:    scheduledRelStore,
-			DataDir:         cfg.Server.DataDir,
-			ServerConfig:    cfg,
-			KnownRepos:      store.list,
-			RunRelease:      runRelease,
-			FetchRepoConfig: fetchRepoConfig,
+			LogStore:              logStore,
+			EventStore:            eventStore,
+			ReleaseStore:          scheduledRelStore,
+			DataDir:               cfg.Server.DataDir,
+			ServerConfig:          cfg,
+			KnownRepos:            store.list,
+			RunRelease:            runRelease,
+			FetchRepoConfig:       fetchRepoConfig,
+			GetInstallationClient: getInstallationClient,
+			RunWorkspaceRelease:   runWorkspaceRelease,
 		})
 		dashAddr := fmt.Sprintf(":%d", cfg.Server.DashboardPort)
 		go func() {
