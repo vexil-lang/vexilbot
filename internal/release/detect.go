@@ -132,6 +132,67 @@ func findLatestTag(tags []string, crate, format string) (string, string) {
 	return matches[0].tag, matches[0].raw
 }
 
+// PackageStatus summarises the release status for one package/crate.
+type PackageStatus struct {
+	Name    string
+	Version string
+	Bump    string // "major", "minor", "patch", or "none"
+	Commits int
+}
+
+// GetStatus returns release status for all configured crates and packages in cfg.
+func GetStatus(ctx context.Context, api GitAPI, owner, repo string, cfg repoconfig.Release) ([]PackageStatus, error) {
+	tagFmt := cfg.TagFormat
+	if tagFmt == "" {
+		tagFmt = "{name}-v{version}"
+	}
+	var results []PackageStatus
+	if len(cfg.Crates) > 0 {
+		changes, err := DetectChanges(ctx, api, owner, repo, tagFmt, cfg.Crates)
+		if err != nil {
+			return nil, err
+		}
+		for name, cr := range changes {
+			results = append(results, PackageStatus{
+				Name:    name,
+				Version: cr.CurrentVersion,
+				Bump:    bumpLevelStr(cr.SuggestedBump, len(cr.Commits)),
+				Commits: len(cr.Commits),
+			})
+		}
+	}
+	if len(cfg.Packages) > 0 {
+		changes, err := DetectPackageChanges(ctx, api, owner, repo, tagFmt, cfg.Packages)
+		if err != nil {
+			return nil, err
+		}
+		for name, cr := range changes {
+			results = append(results, PackageStatus{
+				Name:    name,
+				Version: cr.CurrentVersion,
+				Bump:    bumpLevelStr(cr.SuggestedBump, len(cr.Commits)),
+				Commits: len(cr.Commits),
+			})
+		}
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].Name < results[j].Name })
+	return results, nil
+}
+
+func bumpLevelStr(b BumpLevel, commits int) string {
+	if commits == 0 {
+		return "none"
+	}
+	switch b {
+	case BumpMajor:
+		return "major"
+	case BumpMinor:
+		return "minor"
+	default:
+		return "patch"
+	}
+}
+
 // FormatStatus produces a markdown summary of unreleased changes.
 func FormatStatus(results map[string]ChangeResult) string {
 	var lines []string

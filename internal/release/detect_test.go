@@ -88,3 +88,14 @@ func TestDetectChanges(t *testing.T) {
 		t.Errorf("runtime commits = %d, want 0", len(rtResult.Commits))
 	}
 }
+
+func TestGetStatus_NoPackages(t *testing.T) {
+	cfg := repoconfig.Release{}
+	results, err := release.GetStatus(context.Background(), &mockGitAPI{}, "owner", "repo", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(results))
+	}
+}
