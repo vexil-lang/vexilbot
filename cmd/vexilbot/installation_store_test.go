@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
 	"github.com/vexil-lang/vexilbot/internal/vexstore"
 	"github.com/vexil-lang/vexilbot/internal/vexstore/gen/installation"
 )
@@ -33,6 +34,22 @@ func TestInstallationStoreSetAppends(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Fatalf("want 1 record, got %d", len(records))
+	}
+
+	// Verify the encoded fields decode correctly
+	r := vexil.NewBitReader(records[0])
+	var ev installation.InstallationEvent
+	if err := ev.Unpack(r); err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if ev.Owner != "vexil-lang" {
+		t.Errorf("Owner: want %q, got %q", "vexil-lang", ev.Owner)
+	}
+	if ev.Repo != "vexil" {
+		t.Errorf("Repo: want %q, got %q", "vexil", ev.Repo)
+	}
+	if ev.Iid != 42 {
+		t.Errorf("Iid: want 42, got %d", ev.Iid)
 	}
 }
 
