@@ -15,6 +15,7 @@ import (
 	"time"
 
 	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+	_ "github.com/vexil-lang/vexilbot/internal/configoverride"
 	"github.com/vexil-lang/vexilbot/internal/dashboard"
 	"github.com/vexil-lang/vexilbot/internal/ghclient"
 	"github.com/vexil-lang/vexilbot/internal/labeler"

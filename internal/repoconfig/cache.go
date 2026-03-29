@@ -38,7 +38,9 @@ func NewCache(fetcher Fetcher, ttl time.Duration) *Cache {
 // (from dataDir/overrides/<owner>-<repo>.toml) on top of fetched configs.
 func NewCacheWithOverrides(fetcher Fetcher, dataDir string, ttl time.Duration) *Cache {
 	c := NewCache(fetcher, ttl)
-	c.SetOverrideMerger(MakeFilesystemOverrideMerger(dataDir))
+	if MakeFilesystemOverrideMerger != nil {
+		c.SetOverrideMerger(MakeFilesystemOverrideMerger(dataDir))
+	}
 	return c
 }
 
