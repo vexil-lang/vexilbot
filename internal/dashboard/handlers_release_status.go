@@ -128,6 +128,39 @@ func (a *ghReleaseAPI) ListTags(ctx context.Context, owner, repo string) ([]stri
 }
 
 func (a *ghReleaseAPI) CommitsSinceTag(ctx context.Context, owner, repo, tag, path string) ([]release.Commit, error) {
+	if tag == "" {
+		// Never released — list all commits on HEAD.
+		ghCommits, _, err := a.client.Repositories.ListCommits(ctx, owner, repo, &github.CommitsListOptions{
+			ListOptions: github.ListOptions{PerPage: 100},
+		})
+		if err != nil {
+			return nil, err
+		}
+		var commits []release.Commit
+		for _, c := range ghCommits {
+			if path != "" {
+				full, _, err := a.client.Repositories.GetCommit(ctx, owner, repo, c.GetSHA(), &github.ListOptions{})
+				if err != nil {
+					continue
+				}
+				touches := false
+				for _, f := range full.Files {
+					if strings.HasPrefix(f.GetFilename(), path) {
+						touches = true
+						break
+					}
+				}
+				if !touches {
+					continue
+				}
+			}
+			commits = append(commits, release.Commit{
+				SHA:     c.GetSHA(),
+				Message: c.GetCommit().GetMessage(),
+			})
+		}
+		return commits, nil
+	}
 	cmp, _, err := a.client.Repositories.CompareCommits(ctx, owner, repo, tag, "HEAD", &github.ListOptions{PerPage: 100})
 	if err != nil {
 		return nil, err

@@ -36,6 +36,9 @@ func DetectChanges(
 ) (map[string]ChangeResult, error) {
 	paths := make(map[string]string, len(crates))
 	for name, c := range crates {
+		if isPublishDisabled(c.Publish) {
+			continue
+		}
 		paths[name] = c.Path
 	}
 	return detectByPaths(ctx, api, owner, repo, tagFormat, paths)
